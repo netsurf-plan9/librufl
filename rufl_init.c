@@ -910,5 +910,5 @@ int rufl_font_list_cmp(const void *keyval, const void *datum)
 {
 	const char *key = keyval;
 	const struct rufl_font_list_entry *entry = datum;
-	return strcmp(key, entry->identifier);
+	return strcasecmp(key, entry->identifier);
 }

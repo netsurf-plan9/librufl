@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include "oslib/font.h"
 #include "rufl_internal.h"
 
@@ -225,7 +226,7 @@ int rufl_family_list_cmp(const void *keyval, const void *datum)
 {
 	const char *key = keyval;
 	const char * const *entry = datum;
-	return strcmp(key, *entry);
+	return strcasecmp(key, *entry);
 }
 
 
