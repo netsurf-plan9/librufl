@@ -91,11 +91,15 @@ rufl_code rufl_init(void)
 		if (rufl_fm_error->errnum == error_FONT_ENCODING_NOT_FOUND) {
 			rufl_old_font_manager = true;
 		} else {
+			LOG("xfont_find_font: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
 			rufl_quit();
 			xhourglass_off();
 			return rufl_FONT_MANAGER_ERROR;
 		}
 	}
+	LOG("%s font manager", rufl_old_font_manager ? "old" : "new");
 
 	code = rufl_init_font_list();
 	if (code != rufl_OK) {
@@ -113,9 +117,12 @@ rufl_code rufl_init(void)
 
 	xhourglass_leds(1, 0, 0);
 	for (i = 0; i != rufl_font_list_entries; i++) {
-		if (rufl_font_list[i].charset)
+		if (rufl_font_list[i].charset) {
 			/* character set loaded from cache */
+			LOG("font %u \"%s\" from cache", i,
+					rufl_font_list[i].identifier);
 			continue;
+		}
 		xhourglass_percentage(100 * i / rufl_font_list_entries);
 		if (rufl_old_font_manager)
 			code = rufl_init_scan_font_old(i);
@@ -182,8 +189,12 @@ rufl_code rufl_init_font_list(void)
 				font_RETURN_FONT_NAME | context,
 				0, 0, 0, 0,
 				&context2, &size, 0);
-		if (rufl_fm_error)
+		if (rufl_fm_error) {
+			LOG("xfont_list_fonts: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
 			return rufl_FONT_MANAGER_ERROR;
+		}
 		if (context2 == -1)
 			break;
 
@@ -208,8 +219,13 @@ rufl_code rufl_init_font_list(void)
 				font_RETURN_FONT_NAME | context,
 				size, 0, 0, 0,
 				&context, 0, 0);
-		if (rufl_fm_error)
+		if (rufl_fm_error) {
+			LOG("xfont_list_fonts: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
 			return rufl_FONT_MANAGER_ERROR;
+		}
+		LOG("%u \"%s\"", rufl_font_list_entries - 1, identifier);
 
 		/* add family to list, if it is new */
 		dot = strchr(identifier, '.');
@@ -232,6 +248,7 @@ rufl_code rufl_init_font_list(void)
 		}
 
 		/* new family */
+		LOG("new family %u", rufl_family_list_entries);
 		family_list = realloc(rufl_family_list,
 				sizeof rufl_family_list[0] *
 				(rufl_family_list_entries + 1));
@@ -290,6 +307,9 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 	font_f font;
 	font_scan_block block = { { 0, 0 }, { 0, 0 }, -1, { 0, 0, 0, 0 } };
 
+	LOG("font %u \"%s\"", font_index,
+			rufl_font_list[font_index].identifier);
+
 	charset = calloc(1, sizeof *charset);
 	if (!charset)
 		return rufl_OUT_OF_MEMORY;
@@ -300,6 +320,8 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 	rufl_fm_error = xfont_find_font(font_name, 160, 160, 0, 0, &font, 0, 0);
 	if (rufl_fm_error) {
 		free(charset);
+		LOG("xfont_find_font(\"%s\"): 0x%x: %s", font_name,
+				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
 
@@ -353,6 +375,8 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 
 	if (rufl_fm_error) {
 		free(charset);
+		LOG("xfont_scan_string: 0x%x: %s",
+				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
 
@@ -391,6 +415,8 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 	font_f font;
 	font_scan_block block = { { 0, 0 }, { 0, 0 }, -1, { 0, 0, 0, 0 } };
 
+	LOG("font %u \"%s\"", font_index, font_name);
+
 	charset = calloc(1, sizeof *charset);
 	if (!charset)
 		return rufl_OUT_OF_MEMORY;
@@ -405,6 +431,8 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 	if (rufl_fm_error) {
 		free(umap);
 		free(charset);
+		LOG("xfont_find_font(\"%s\"): 0x%x: %s", font_name,
+				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
 
@@ -456,6 +484,8 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 	if (rufl_fm_error) {
 		free(umap);
 		free(charset);
+		LOG("xfont_scan_string: 0x%x: %s",
+				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
 
@@ -494,8 +524,11 @@ rufl_code rufl_init_read_encoding(font_f font,
 
 	rufl_fm_error = xfont_read_encoding_filename(font, filename,
 			sizeof filename, 0);
-	if (rufl_fm_error)
+	if (rufl_fm_error) {
+		LOG("xfont_read_encoding_filename: 0x%x: %s",
+				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
+	}
 
 	fp = fopen(filename, "r");
 	if (!fp && errno == ENOENT)

@@ -19,7 +19,7 @@ SOURCE = rufl_init.c rufl_quit.c rufl_dump_state.c \
 
 all: rufl.o rufl_test,ff8 rufl_chars,ff8
 
-rufl.o: $(SOURCE) Glyphs
+rufl.o: $(SOURCE) rufl.h rufl_internal.h Glyphs
 	$(CC) $(CFLAGS) -c -o $@ $(SOURCE)
 
 rufl_glyph_map.c: Glyphs makeglyphs

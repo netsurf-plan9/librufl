@@ -166,3 +166,12 @@ struct rufl_glyph_map_entry {
 
 extern const struct rufl_glyph_map_entry rufl_glyph_map[];
 extern const size_t rufl_glyph_map_size;
+
+
+#ifndef NDEBUG
+#define LOG(format, ...) (fprintf(stderr, __FILE__ " %s %i: ", \
+		__PRETTY_FUNCTION__, __LINE__), fprintf(stderr, format, \
+		__VA_ARGS__), fprintf(stderr, "\n"))
+#else
+#define LOG(format, ...)
+#endif
