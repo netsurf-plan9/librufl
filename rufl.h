@@ -64,6 +64,16 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 
 
 /**
+ * Measure the width of Unicode text.
+ */
+
+rufl_code rufl_width(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int *width);
+
+
+/**
  * Dump the internal library state to stdout.
  */
 

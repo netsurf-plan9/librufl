@@ -12,13 +12,24 @@
 #include "rufl_internal.h"
 
 
+typedef enum { rufl_PAINT, rufl_WIDTH } rufl_action;
+
+
+static rufl_code rufl_process(rufl_action action,
+		const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int x, int y, int *width);
 static int rufl_family_list_cmp(const void *keyval, const void *datum);
-static rufl_code rufl_paint_span(unsigned short *s, unsigned int n,
+static rufl_code rufl_process_span(rufl_action action,
+		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y);
-static rufl_code rufl_paint_span_old(unsigned short *s, unsigned int n,
+static rufl_code rufl_process_span_old(rufl_action action,
+		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y);
 static int rufl_unicode_map_search_cmp(const void *keyval, const void *datum);
-static rufl_code rufl_paint_not_available(unsigned short *s, unsigned int n,
+static rufl_code rufl_process_not_available(rufl_action action,
+		unsigned short *s, unsigned int n,
 		unsigned int font_size, int *x, int y);
 static rufl_code rufl_place_in_cache(unsigned int font, unsigned int font_size,
 		font_f f);
@@ -32,6 +43,37 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 		unsigned int font_size,
 		const char *string, size_t length,
 		int x, int y)
+{
+	return rufl_process(rufl_PAINT,
+			font_family, font_style, font_size, string,
+			length, x, y, 0);
+}
+
+
+/**
+ * Measure the width of Unicode text.
+ */
+
+rufl_code rufl_width(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int *width)
+{
+	return rufl_process(rufl_WIDTH,
+			font_family, font_style, font_size, string,
+			length, 0, 0, width);
+}
+
+
+/**
+ * Render, measure, or split Unicode text.
+ */
+
+rufl_code rufl_process(rufl_action action,
+		const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int x, int y, int *width)
 {
 	unsigned short s[80];
 	unsigned int font;
@@ -77,17 +119,22 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 		s[n] = 0;
 
 		if (font0 == NOT_AVAILABLE)
-			code = rufl_paint_not_available(s, n, font_size, &x, y);
+			code = rufl_process_not_available(action, s, n,
+					font_size, &x, y);
 		else if (rufl_old_font_manager)
-			code = rufl_paint_span_old(s, n, font0, font_size,
-					&x, y);
+			code = rufl_process_span_old(action, s, n, font0,
+					font_size, &x, y);
 		else
-			code = rufl_paint_span(s, n, font0, font_size, &x, y);
+			code = rufl_process_span(action, s, n, font0,
+					font_size, &x, y);
 
 		if (code != rufl_OK)
 			return code;
 
 	} while (!(length == 0 && font1 == font0));
+
+	if (width)
+		*width = x;
 
 	return rufl_OK;
 }
@@ -105,7 +152,8 @@ int rufl_family_list_cmp(const void *keyval, const void *datum)
  * Render a string of characters from a single RISC OS font.
  */
 
-rufl_code rufl_paint_span(unsigned short *s, unsigned int n,
+rufl_code rufl_process_span(rufl_action action,
+		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y)
 {
 	char font_name[80];
@@ -138,14 +186,16 @@ rufl_code rufl_paint_span(unsigned short *s, unsigned int n,
 			return code;
 	}
 
-	/* paint span */
-	rufl_fm_error = xfont_paint(f, (const char *) s, font_OS_UNITS |
-			font_GIVEN_LENGTH | font_GIVEN_FONT | font_KERN |
-			font_GIVEN16_BIT,
-			*x, y, 0, 0, n * 2);
-	if (rufl_fm_error) {
-		xfont_lose_font(f);
-		return rufl_FONT_MANAGER_ERROR;
+	if (action == rufl_PAINT) {
+		/* paint span */
+		rufl_fm_error = xfont_paint(f, (const char *) s,
+				font_OS_UNITS | font_GIVEN_LENGTH |
+				font_GIVEN_FONT | font_KERN | font_GIVEN16_BIT,
+				*x, y, 0, 0, n * 2);
+		if (rufl_fm_error) {
+			xfont_lose_font(f);
+			return rufl_FONT_MANAGER_ERROR;
+		}
 	}
 
 	/* increment x by width of span */
@@ -169,7 +219,8 @@ rufl_code rufl_paint_span(unsigned short *s, unsigned int n,
  * version).
  */
 
-rufl_code rufl_paint_span_old(unsigned short *s, unsigned int n,
+rufl_code rufl_process_span_old(rufl_action action,
+		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y)
 {
 	char s2[80];
@@ -212,13 +263,15 @@ rufl_code rufl_paint_span_old(unsigned short *s, unsigned int n,
 	}
 	s2[i] = 0;
 
-	/* paint span */
-	rufl_fm_error = xfont_paint(f, s2, font_OS_UNITS |
-			font_GIVEN_LENGTH | font_GIVEN_FONT | font_KERN,
-			*x, y, 0, 0, n);
-	if (rufl_fm_error) {
-		xfont_lose_font(f);
-		return rufl_FONT_MANAGER_ERROR;
+	if (action == rufl_PAINT) {
+		/* paint span */
+		rufl_fm_error = xfont_paint(f, s2, font_OS_UNITS |
+				font_GIVEN_LENGTH | font_GIVEN_FONT | font_KERN,
+				*x, y, 0, 0, n);
+		if (rufl_fm_error) {
+			xfont_lose_font(f);
+			return rufl_FONT_MANAGER_ERROR;
+		}
 	}
 
 	/* increment x by width of span */
@@ -252,13 +305,19 @@ int rufl_unicode_map_search_cmp(const void *keyval, const void *datum)
  * Render a string of characters not available in any font as their hex code.
  */
 
-rufl_code rufl_paint_not_available(unsigned short *s, unsigned int n,
+rufl_code rufl_process_not_available(rufl_action action,
+		unsigned short *s, unsigned int n,
 		unsigned int font_size, int *x, int y)
 {
 	char missing[] = "0000";
 	unsigned int i;
 	font_f f;
 	rufl_code code;
+
+	if (action == rufl_WIDTH) {
+		*x += 7 * font_size / 64;
+		return rufl_OK;
+	}
 
 	/* search cache */
 	for (i = 0; i != rufl_CACHE_SIZE; i++) {

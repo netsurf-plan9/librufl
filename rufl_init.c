@@ -29,10 +29,13 @@ int rufl_cache_time = 0;
 bool rufl_old_font_manager = false;
 
 
+/** An entry in rufl_style_table. */
 struct rufl_style_table_entry {
 	const char *name;
 	unsigned int style;
 };
+
+/** Map from font name tail to font style. Must be sorted by name. */
 const struct rufl_style_table_entry rufl_style_table[] = {
 	{ "Bold", rufl_BOLD },
 	{ "Bold.Italic", rufl_BOLD_SLANTED },
