@@ -210,8 +210,14 @@ int main(void)
 
 		case wimp_USER_MESSAGE:
 		case wimp_USER_MESSAGE_RECORDED:
-			if (block.message.action == message_QUIT)
+			switch (block.message.action) {
+			case message_QUIT:
 				quit = true;
+				break;
+			case message_MODE_CHANGE:
+				rufl_invalidate_cache();
+				break;
+			}
 			break;
 		}
 	}

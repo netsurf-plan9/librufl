@@ -108,6 +108,15 @@ void rufl_dump_state(void);
 
 
 /**
+ * Clear the internal font handle cache.
+ *
+ * Call this function on mode changes or output redirection changes.
+ */
+
+void rufl_invalidate_cache(void);
+
+
+/**
  * Free all resources used by the library.
  */
 
