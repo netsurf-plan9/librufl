@@ -144,7 +144,6 @@ rufl_code rufl_init(void)
 			xhourglass_off();
 			return code;
 		}
-		assert(rufl_font_list[i].charset);
 		changes++;
 	}
 
@@ -336,9 +335,7 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 	if (rufl_fm_error) {
 		LOG("xfont_find_font(\"%s\"): 0x%x: %s", font_name,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
-		for (u = 0; u != 256; u++)
-			charset->index[u] = BLOCK_EMPTY;
-		rufl_font_list[font_index].charset = charset;
+		free(charset);
 		return rufl_OK;
 	}
 
@@ -451,7 +448,7 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 		LOG("xfont_find_font(\"%s\"): 0x%x: %s", font_name,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		free(umap);
-		rufl_font_list[font_index].charset = charset;
+		free(charset);
 		return rufl_OK;
 	}
 
@@ -643,6 +640,8 @@ rufl_code rufl_init_substitution_table(void)
 
 	for (i = 0; i != rufl_font_list_entries; i++) {
 		charset = rufl_font_list[i].charset;
+		if (!charset)
+			continue;
 		for (block = 0; block != 256; block++) {
 			if (charset->index[block] == BLOCK_EMPTY)
 				continue;
@@ -708,6 +707,9 @@ rufl_code rufl_save_cache(void)
 	}
 
 	for (i = 0; i != rufl_font_list_entries; i++) {
+		if (!rufl_font_list[i].charset)
+			continue;
+
 		/* length of font identifier */
 		len = strlen(rufl_font_list[i].identifier);
 		if (fwrite(&len, sizeof len, 1, fp) != 1) {

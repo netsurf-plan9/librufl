@@ -11,7 +11,8 @@
 /**
  * Test if a character set contains a character.
  *
- * \param  c  character code
+ * \param  charset  character set
+ * \param  c        character code
  * \return  true if present, false if absent
  */
 
