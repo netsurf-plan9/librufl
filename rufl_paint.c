@@ -164,7 +164,7 @@ rufl_code rufl_process(rufl_action action,
 	if (rufl_character_set_test(charset, u))
 		font1 = font;
 	else
-		font1 = rufl_substitution_lookup(u);
+		font1 = rufl_substitution_table[u];
 	do {
 		s[0] = u;
 		offset_map[0] = offset_u;
@@ -179,7 +179,7 @@ rufl_code rufl_process(rufl_action action,
 			if (rufl_character_set_test(charset, u))
 				font1 = font;
 			else
-				font1 = rufl_substitution_lookup(u);
+				font1 = rufl_substitution_table[u];
 			if (font1 == font0)
 				n++;
 		}

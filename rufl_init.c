@@ -23,7 +23,7 @@ char **rufl_family_list = 0;
 unsigned int rufl_family_list_entries = 0;
 unsigned int *rufl_family_map = 0;
 os_error *rufl_fm_error = 0;
-struct rufl_substitution_table *rufl_substitution_table = 0;
+unsigned short *rufl_substitution_table;
 struct rufl_cache_entry rufl_cache[rufl_CACHE_SIZE];
 int rufl_cache_time = 0;
 bool rufl_old_font_manager = false;
@@ -119,8 +119,8 @@ rufl_code rufl_init(void)
 	for (i = 0; i != rufl_font_list_entries; i++) {
 		if (rufl_font_list[i].charset) {
 			/* character set loaded from cache */
-			LOG("font %u \"%s\" from cache", i,
-					rufl_font_list[i].identifier);
+			/*LOG("font %u \"%s\" from cache", i,
+					rufl_font_list[i].identifier);*/
 			continue;
 		}
 		xhourglass_percentage(100 * i / rufl_font_list_entries);
@@ -225,7 +225,7 @@ rufl_code rufl_init_font_list(void)
 					rufl_fm_error->errmess);
 			return rufl_FONT_MANAGER_ERROR;
 		}
-		LOG("%u \"%s\"", rufl_font_list_entries - 1, identifier);
+		/*LOG("%u \"%s\"", rufl_font_list_entries - 1, identifier);*/
 
 		/* add family to list, if it is new */
 		dot = strchr(identifier, '.');
@@ -248,7 +248,7 @@ rufl_code rufl_init_font_list(void)
 		}
 
 		/* new family */
-		LOG("new family %u", rufl_family_list_entries);
+		/*LOG("new family %u", rufl_family_list_entries);*/
 		family_list = realloc(rufl_family_list,
 				sizeof rufl_family_list[0] *
 				(rufl_family_list_entries + 1));
@@ -307,8 +307,8 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 	font_f font;
 	font_scan_block block = { { 0, 0 }, { 0, 0 }, -1, { 0, 0, 0, 0 } };
 
-	LOG("font %u \"%s\"", font_index,
-			rufl_font_list[font_index].identifier);
+	/*LOG("font %u \"%s\"", font_index,
+			rufl_font_list[font_index].identifier);*/
 
 	charset = calloc(1, sizeof *charset);
 	if (!charset)
@@ -319,10 +319,12 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 
 	rufl_fm_error = xfont_find_font(font_name, 160, 160, 0, 0, &font, 0, 0);
 	if (rufl_fm_error) {
-		free(charset);
 		LOG("xfont_find_font(\"%s\"): 0x%x: %s", font_name,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
-		return rufl_FONT_MANAGER_ERROR;
+		for (u = 0; u != 256; u++)
+			charset->index[u] = BLOCK_EMPTY;
+		rufl_font_list[font_index].charset = charset;
+		return rufl_OK;
 	}
 
 	/* scan through all characters */
@@ -607,54 +609,50 @@ int rufl_unicode_map_cmp(const void *z1, const void *z2)
 
 rufl_code rufl_init_substitution_table(void)
 {
-	unsigned int block_count = 0;
+	unsigned char z;
 	unsigned int i;
-	unsigned int last_used = 0;
+	unsigned int block, byte, bit;
 	unsigned int u;
-	struct rufl_substitution_table *substitution_table2;
+	unsigned int index;
+	const struct rufl_character_set *charset;
 
-	rufl_substitution_table = malloc(sizeof *rufl_substitution_table);
+	rufl_substitution_table = malloc(65536 *
+			sizeof rufl_substitution_table[0]);
 	if (!rufl_substitution_table)
 		return rufl_OUT_OF_MEMORY;
 
-	/* scan through all characters */
-	for (u = 0; u != 0x10000; u++) {
-		rufl_substitution_table->block[last_used][u & 255] =
-				NOT_AVAILABLE;
-		for (i = 0; i != rufl_font_list_entries; i++) {
-			if (rufl_character_set_test(rufl_font_list[i].charset,
-					u)) {
-				rufl_substitution_table->block[last_used]
-						[u & 255] = i;
-				block_count++;
-				break;
-			}
-		}
+	for (u = 0; u != 0x10000; u++)
+		rufl_substitution_table[u] = NOT_AVAILABLE;
 
-		if ((u + 1) % 256 == 0) {
-			/* end of block */
-			if (block_count == 0) {
-				rufl_substitution_table->index[u >> 8] =
-						BLOCK_NONE_AVAILABLE;
-			} else {
-				rufl_substitution_table->index[u >> 8] =
-						last_used;
-				last_used++;
-				if (last_used == 255)
-					/* too many characters */
-					break;
+	for (i = 0; i != rufl_font_list_entries; i++) {
+		charset = rufl_font_list[i].charset;
+		for (block = 0; block != 256; block++) {
+			if (charset->index[block] == BLOCK_EMPTY)
+				continue;
+			if (charset->index[block] == BLOCK_FULL) {
+				for (u = block << 8; u != (block << 8) + 256;
+						u++) {
+					if (rufl_substitution_table[u] ==
+							NOT_AVAILABLE)
+						rufl_substitution_table[u] = i;
+				}
+				continue;
 			}
-			block_count = 0;
+			index = charset->index[block];
+			for (byte = 0; byte != 32; byte++) {
+				z = charset->block[index][byte];
+				if (z == 0)
+					continue;
+				u = (block << 8) | (byte << 3);
+				for (bit = 0; bit != 8; bit++, u++) {
+					if (rufl_substitution_table[u] ==
+							NOT_AVAILABLE &&
+							z & (1 << bit))
+						rufl_substitution_table[u] = i;
+				}
+			}
 		}
 	}
-
-	/* shrink-wrap */
-	substitution_table2 = realloc(rufl_substitution_table,
-			offsetof(struct rufl_substitution_table, block) +
-			sizeof (short) * 256 * last_used);
-	if (!substitution_table2)
-		return rufl_OUT_OF_MEMORY;
-	rufl_substitution_table = substitution_table2;
 
 	return rufl_OK;
 }

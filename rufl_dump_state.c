@@ -109,8 +109,8 @@ void rufl_dump_substitution_table(void)
 	u = 0;
 	while (u != 0x10000) {
 		t = u;
-		font = rufl_substitution_lookup(t);
-		while (u != 0x10000 && font == rufl_substitution_lookup(u))
+		font = rufl_substitution_table[t];
+		while (u != 0x10000 && font == rufl_substitution_table[u])
 			u++;
 		if (font != NOT_AVAILABLE)
 			printf("  %x-%x => %u \"%s\"\n", t, u - 1,

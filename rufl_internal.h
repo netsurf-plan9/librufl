@@ -76,26 +76,10 @@ extern unsigned int rufl_font_list_entries;
 extern unsigned int *rufl_family_map;
 
 
-/** Map from characters to a font which includes them. A typical machine might
- * have characters from 30 blocks, giving 15616 bytes. */
-struct rufl_substitution_table {
-	/** Index table. Each entry represents a block of 256 characters, so
-	 * i[k] refers to characters [256*k, 256*(k+1)). The value is either
-	 * BLOCK_NONE_AVAILABLE or an offset into the block table. */
-	unsigned char index[256];
-	/** None of the characters in the block are available in any font. */
-#	define BLOCK_NONE_AVAILABLE 255
-
-	/** Block table. Each entry is a map from the characters in the block
-	 * to a font number which includes it, or NOT_AVAILABLE. */
-	unsigned short block[255][256];
-	/** No font contains this character. */
-#	define NOT_AVAILABLE 65535
-};
-
-
+/** No font contains this character. */
+#define NOT_AVAILABLE 65535
 /** Font substitution table. */
-extern struct rufl_substitution_table *rufl_substitution_table;
+extern unsigned short *rufl_substitution_table;
 
 
 /** Number of slots in recent-use cache. This is the maximum number of RISC OS
@@ -128,7 +112,6 @@ extern bool rufl_old_font_manager;
 
 bool rufl_character_set_test(struct rufl_character_set *charset,
 		unsigned int c);
-unsigned int rufl_substitution_lookup(unsigned int c);
 
 
 #define rufl_utf8_read(s, l, u)						       \

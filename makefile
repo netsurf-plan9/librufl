@@ -14,7 +14,7 @@ CFLAGS = -std=c99 -O3 -W -Wall -Wundef -Wpointer-arith -Wcast-qual \
 LIBS = -L/home/riscos/env/lib -loslib
 
 SOURCE = rufl_init.c rufl_quit.c rufl_dump_state.c \
-	rufl_character_set_test.c rufl_substitution_lookup.c \
+	rufl_character_set_test.c \
 	rufl_paint.c rufl_glyph_map.c rufl_invalidate_cache.c
 
 all: rufl.o rufl_test,ff8 rufl_chars,ff8
