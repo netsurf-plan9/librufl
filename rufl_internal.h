@@ -109,6 +109,8 @@ extern int rufl_cache_time;
 /** Font manager does not support Unicode. */
 extern bool rufl_old_font_manager;
 
+/** Font manager supports background blending */
+extern bool rufl_can_background_blend;
 
 bool rufl_character_set_test(struct rufl_character_set *charset,
 		unsigned int c);

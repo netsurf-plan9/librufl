@@ -260,7 +260,8 @@ rufl_code redraw(int x, int y, int y0, int y1)
 
 		code = rufl_paint(rufl_family_list[font], style, 240, s, l,
 				x + 10 + 40 * (u % 32),
-				y - 40 - 40 * (u / 32));
+				y - 40 - 40 * (u / 32),
+				0);
 		if (code != rufl_OK)
 			return code;
 	}

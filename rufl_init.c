@@ -75,6 +75,7 @@ rufl_code rufl_init(void)
 {
 	unsigned int changes = 0;
 	unsigned int i;
+	int fm_version;
 	rufl_code code;
 	font_f font;
 
@@ -100,6 +101,13 @@ rufl_code rufl_init(void)
 		}
 	}
 	LOG("%s font manager", rufl_old_font_manager ? "old" : "new");
+
+	/* test if the font manager supports background blending */
+	rufl_fm_error = xfont_cache_addr(&fm_version, 0, 0);
+	if (rufl_fm_error)
+		return rufl_FONT_MANAGER_ERROR;
+	if (fm_version >= 335)
+		rufl_can_background_blend = true;
 
 	code = rufl_init_font_list();
 	if (code != rufl_OK) {

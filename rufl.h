@@ -37,6 +37,8 @@ typedef enum {
 	rufl_BOLD_SLANTED = 3,
 } rufl_style;
 
+/** rufl_paint(_transformed) flags */
+#define rufl_BLEND_FONT 0x01
 
 /** Last Font Manager error. */
 extern os_error *rufl_fm_error;
@@ -63,7 +65,7 @@ rufl_code rufl_init(void);
 rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 		unsigned int font_size,
 		const char *string, size_t length,
-		int x, int y);
+		int x, int y, unsigned int flags);
 
 
 /**
@@ -76,7 +78,7 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 rufl_code rufl_paint_transformed(const char *font_family, rufl_style font_style,
 		unsigned int font_size,
 		const char *string, size_t length,
-		int x, int y, os_trfm *trfm);
+		int x, int y, os_trfm *trfm, unsigned int flags);
 
 
 /**

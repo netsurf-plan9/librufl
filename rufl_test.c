@@ -27,7 +27,7 @@ int main(void)
 	rufl_dump_state();
 	try(rufl_paint("NewHall", rufl_REGULAR, 240,
 			utf8_test, sizeof utf8_test - 1,
-			1200, 1200), "rufl_paint");
+			1200, 1200, 0), "rufl_paint");
 	try(rufl_width("NewHall", rufl_REGULAR, 240,
 			utf8_test, sizeof utf8_test - 1,
 			&width), "rufl_width");
