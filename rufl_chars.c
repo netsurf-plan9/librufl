@@ -20,7 +20,7 @@ bool bold = false;
 bool italic = false;
 
 
-static void redraw(int x, int y, int y0, int y1);
+static rufl_code redraw(int x, int y, int y0, int y1);
 static void try(rufl_code code, const char *context);
 static void die(const char *error);
 
@@ -60,6 +60,7 @@ int main(void)
 	wimp_pointer pointer;
 	osbool more;
 	os_error *error;
+	rufl_code code = rufl_OK;
 
 	error = xwimp_initialise(wimp_VERSION_RO3, "RUfl Chars",
 			(wimp_message_list *) &messages,
@@ -138,7 +139,7 @@ int main(void)
 			xcolourtrans_set_font_colours(0, os_COLOUR_WHITE,
 					os_COLOUR_BLACK, 14, 0, 0, 0);
 			while (more) {
-				redraw(block.redraw.box.x0 -
+				code = redraw(block.redraw.box.x0 -
 						block.redraw.xscroll,
 						block.redraw.box.y1 -
 						block.redraw.yscroll,
@@ -153,6 +154,7 @@ int main(void)
 				if (error)
 					die(error->errmess);
 			}
+			try(code, "redraw");
 			break;
 
 		case wimp_OPEN_WINDOW_REQUEST:
@@ -225,11 +227,12 @@ int main(void)
 }
 
 
-void redraw(int x, int y, int y0, int y1)
+rufl_code redraw(int x, int y, int y0, int y1)
 {
 	char s[10];
 	unsigned int l;
 	unsigned int u;
+	rufl_code code;
 	rufl_style style = bold && italic ? rufl_BOLD_SLANTED :
 			bold ? rufl_BOLD :
 			italic ? rufl_SLANTED :
@@ -249,10 +252,14 @@ void redraw(int x, int y, int y0, int y1)
 			break;
 		s[l] = 0;
 
-		rufl_paint(rufl_family_list[font], style, 240, s, l,
+		code = rufl_paint(rufl_family_list[font], style, 240, s, l,
 				x + 10 + 40 * (u % 32),
 				y - 40 - 40 * (u / 32));
+		if (code != rufl_OK)
+			return code;
 	}
+
+	return rufl_OK;
 }
 
 

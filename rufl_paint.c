@@ -15,6 +15,9 @@
 static int rufl_family_list_cmp(const void *keyval, const void *datum);
 static rufl_code rufl_paint_span(unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y);
+static rufl_code rufl_paint_span_old(unsigned short *s, unsigned int n,
+		unsigned int font, unsigned int font_size, int *x, int y);
+static int rufl_unicode_map_search_cmp(const void *keyval, const void *datum);
 static rufl_code rufl_paint_not_available(unsigned short *s, unsigned int n,
 		unsigned int font_size, int *x, int y);
 static rufl_code rufl_place_in_cache(unsigned int font, unsigned int font_size,
@@ -26,7 +29,7 @@ static rufl_code rufl_place_in_cache(unsigned int font, unsigned int font_size,
  */
 
 rufl_code rufl_paint(const char *font_family, rufl_style font_style,
-		 unsigned int font_size,
+		unsigned int font_size,
 		const char *string, size_t length,
 		int x, int y)
 {
@@ -75,6 +78,9 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 
 		if (font0 == NOT_AVAILABLE)
 			code = rufl_paint_not_available(s, n, font_size, &x, y);
+		else if (rufl_old_font_manager)
+			code = rufl_paint_span_old(s, n, font0, font_size,
+					&x, y);
 		else
 			code = rufl_paint_span(s, n, font0, font_size, &x, y);
 
@@ -159,6 +165,90 @@ rufl_code rufl_paint_span(unsigned short *s, unsigned int n,
 
 
 /**
+ * Render a string of characters from a single RISC OS font  (old font manager
+ * version).
+ */
+
+rufl_code rufl_paint_span_old(unsigned short *s, unsigned int n,
+		unsigned int font, unsigned int font_size, int *x, int y)
+{
+	char s2[80];
+	const char *font_name = rufl_font_list[font].identifier;
+	int x_out, y_out;
+	unsigned int i;
+	font_f f;
+	rufl_code code;
+	struct rufl_unicode_map_entry *entry;
+
+	/* search cache */
+	for (i = 0; i != rufl_CACHE_SIZE; i++) {
+		if (rufl_cache[i].font == font &&
+				rufl_cache[i].size == font_size)
+			break;
+	}
+	if (i != rufl_CACHE_SIZE) {
+		/* found in cache */
+		f = rufl_cache[i].f;
+		rufl_cache[i].last_used = rufl_cache_time++;
+	} else {
+		/* not found */
+		rufl_fm_error = xfont_find_font(font_name,
+				font_size, font_size, 0, 0, &f, 0, 0);
+		if (rufl_fm_error)
+			return rufl_FONT_MANAGER_ERROR;
+		/* place in cache */
+		code = rufl_place_in_cache(font, font_size, f);
+		if (code != rufl_OK)
+			return code;
+	}
+
+	/* convert Unicode string into character string */
+	for (i = 0; i != n; i++) {
+		entry = bsearch(&s[i], rufl_font_list[font].umap->map,
+				rufl_font_list[font].umap->entries,
+				sizeof rufl_font_list[font].umap->map[0],
+				rufl_unicode_map_search_cmp);
+		s2[i] = entry->c;
+	}
+	s2[i] = 0;
+
+	/* paint span */
+	rufl_fm_error = xfont_paint(f, s2, font_OS_UNITS |
+			font_GIVEN_LENGTH | font_GIVEN_FONT | font_KERN,
+			*x, y, 0, 0, n);
+	if (rufl_fm_error) {
+		xfont_lose_font(f);
+		return rufl_FONT_MANAGER_ERROR;
+	}
+
+	/* increment x by width of span */
+	rufl_fm_error = xfont_scan_string(f, s2,
+			font_GIVEN_LENGTH | font_GIVEN_FONT | font_KERN,
+			0x7fffffff, 0x7fffffff, 0, 0, n,
+			0, &x_out, &y_out, 0);
+	if (rufl_fm_error) {
+		xfont_lose_font(f);
+		return rufl_FONT_MANAGER_ERROR;
+	}
+	*x += x_out / 400;
+
+	return rufl_OK;
+}
+
+
+int rufl_unicode_map_search_cmp(const void *keyval, const void *datum)
+{
+	const unsigned short *key = keyval;
+	const struct rufl_unicode_map_entry *entry = datum;
+	if (*key < entry->u)
+		return -1;
+	else if (entry->u < *key)
+		return 1;
+	return 0;
+}
+
+
+/**
  * Render a string of characters not available in any font as their hex code.
  */
 
@@ -182,7 +272,7 @@ rufl_code rufl_paint_not_available(unsigned short *s, unsigned int n,
 		rufl_cache[i].last_used = rufl_cache_time++;
 	} else {
 		/* not found */
-		rufl_fm_error = xfont_find_font("Corpus.Medium\\EUTF8",
+		rufl_fm_error = xfont_find_font("Corpus.Medium\\ELatin1",
 				font_size / 2, font_size / 2, 0, 0,
 				&f, 0, 0);
 		if (rufl_fm_error)

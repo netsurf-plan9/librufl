@@ -36,12 +36,33 @@ struct rufl_character_set {
 };
 
 
+/** Part of struct rufl_unicode_map. */
+struct rufl_unicode_map_entry {
+	/** Unicode value. */
+	unsigned short u;
+	/** Corresponding character. */
+	unsigned char c;
+};
+
+
+/** Old font manager: mapping from Unicode to character code. This is simply
+ * an array sorted by Unicode value, suitable for bsearch(). */
+struct rufl_unicode_map {
+	/** Number of valid entries in u and c. */
+	unsigned int entries;
+	/** Map from Unicode to character code. */
+	struct rufl_unicode_map_entry map[224];
+};
+
+
 /** An entry in rufl_font_list. */
 struct rufl_font_list_entry {
 	/** Font identifier (name). */
 	char *identifier;
 	/** Character set of font. */
 	struct rufl_character_set *charset;
+	/** Mapping from Unicode to character code. */
+	struct rufl_unicode_map *umap;
 };
 /** List of all available fonts. */
 extern struct rufl_font_list_entry *rufl_font_list;
@@ -101,6 +122,9 @@ extern struct rufl_cache_entry rufl_cache[rufl_CACHE_SIZE];
 /** Counter for measuring age of cache entries. */
 extern int rufl_cache_time;
 
+/** Font manager does not support Unicode. */
+extern bool rufl_old_font_manager;
+
 
 bool rufl_character_set_test(struct rufl_character_set *charset,
 		unsigned int c);
@@ -132,3 +156,13 @@ unsigned int rufl_substitution_lookup(unsigned int c);
 	}
 
 #define rufl_CACHE "<Wimp$ScrapDir>.RUfl_cache"
+#define rufl_CACHE_VERSION 1
+
+
+struct rufl_glyph_map_entry {
+	const char *glyph_name;
+	unsigned short u;
+};
+
+extern const struct rufl_glyph_map_entry rufl_glyph_map[];
+extern const size_t rufl_glyph_map_size;

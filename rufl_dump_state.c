@@ -10,6 +10,7 @@
 
 
 static void rufl_dump_character_set(struct rufl_character_set *charset);
+static void rufl_dump_unicode_map(struct rufl_unicode_map *umap);
 static void rufl_dump_substitution_table(void);
 
 
@@ -31,6 +32,11 @@ void rufl_dump_state(void)
 		} else {
 			printf("    (no charset table)\n");
 		}
+		if (rufl_font_list[i].umap) {
+			printf("    ");
+			rufl_dump_unicode_map(rufl_font_list[i].umap);
+			printf("\n");
+                }
 	}
 
 	printf("rufl_family_list:\n");
@@ -73,6 +79,21 @@ void rufl_dump_character_set(struct rufl_character_set *charset)
 			}
 		}
 	}
+}
+
+
+/**
+ * Dump a representation of a unicode map to stdout.
+ *
+ * \param  umap  unicode map to print
+ */
+
+void rufl_dump_unicode_map(struct rufl_unicode_map *umap)
+{
+	unsigned int i;
+
+	for (i = 0; i != umap->entries; i++)
+		printf("%x:%x ", umap->map[i].u, umap->map[i].c);
 }
 
 

@@ -5,6 +5,7 @@
  * Copyright 2005 James Bursa <james@semichrome.net>
  */
 
+#include <assert.h>
 #include <errno.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -25,13 +26,14 @@ os_error *rufl_fm_error = 0;
 struct rufl_substitution_table *rufl_substitution_table = 0;
 struct rufl_cache_entry rufl_cache[rufl_CACHE_SIZE];
 int rufl_cache_time = 0;
+bool rufl_old_font_manager = false;
 
 
 struct rufl_style_table_entry {
 	const char *name;
 	unsigned int style;
 };
-struct rufl_style_table_entry rufl_style_table[] = {
+const struct rufl_style_table_entry rufl_style_table[] = {
 	{ "Bold", rufl_BOLD },
 	{ "Bold.Italic", rufl_BOLD_SLANTED },
 	{ "Bold.Oblique", rufl_BOLD_SLANTED },
@@ -49,6 +51,11 @@ struct rufl_style_table_entry rufl_style_table[] = {
 static rufl_code rufl_init_font_list(void);
 static int rufl_style_table_cmp(const void *keyval, const void *datum);
 static rufl_code rufl_init_scan_font(unsigned int font);
+static rufl_code rufl_init_scan_font_old(unsigned int font_index);
+static rufl_code rufl_init_read_encoding(font_f font,
+		struct rufl_unicode_map *umap);
+static int rufl_glyph_map_cmp(const void *keyval, const void *datum);
+static int rufl_unicode_map_cmp(const void *z1, const void *z2);
 static rufl_code rufl_init_substitution_table(void);
 static rufl_code rufl_save_cache(void);
 static rufl_code rufl_load_cache(void);
@@ -66,12 +73,26 @@ rufl_code rufl_init(void)
 	bool changes = false;
 	unsigned int i;
 	rufl_code code;
+	font_f font;
 
 	if (rufl_font_list_entries)
 		/* already initialized */
 		return rufl_OK;
 
 	xhourglass_on();
+
+	/* determine if the font manager support Unicode */
+	rufl_fm_error = xfont_find_font("Homerton.Medium\\EUTF8", 160, 160,
+			0, 0, &font, 0, 0);
+	if (rufl_fm_error) {
+		if (rufl_fm_error->errnum == error_FONT_ENCODING_NOT_FOUND) {
+			rufl_old_font_manager = true;
+		} else {
+			rufl_quit();
+			xhourglass_off();
+			return rufl_FONT_MANAGER_ERROR;
+		}
+	}
 
 	code = rufl_init_font_list();
 	if (code != rufl_OK) {
@@ -93,12 +114,16 @@ rufl_code rufl_init(void)
 			/* character set loaded from cache */
 			continue;
 		xhourglass_percentage(100 * i / rufl_font_list_entries);
-		code = rufl_init_scan_font(i);
+		if (rufl_old_font_manager)
+			code = rufl_init_scan_font_old(i);
+		else
+			code = rufl_init_scan_font(i);
 		if (code != rufl_OK) {
 			rufl_quit();
 			xhourglass_off();
 			return code;
 		}
+		assert(rufl_font_list[i].charset);
 		changes = true;
 	}
 
@@ -172,6 +197,7 @@ rufl_code rufl_init_font_list(void)
 
 		rufl_font_list[rufl_font_list_entries].identifier = identifier;
 		rufl_font_list[rufl_font_list_entries].charset = 0;
+		rufl_font_list[rufl_font_list_entries].umap = 0;
 		rufl_font_list_entries++;
 
 		/* read identifier */
@@ -343,6 +369,194 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 
 
 /**
+ * Scan a font for available characters (old font manager version).
+ */
+
+rufl_code rufl_init_scan_font_old(unsigned int font_index)
+{
+	const char *font_name = rufl_font_list[font_index].identifier;
+	char string[2] = { 0, 0 };
+	int x_out, y_out;
+	unsigned int byte, bit;
+	unsigned int i;
+	unsigned int last_used = 0;
+	unsigned int u;
+	struct rufl_character_set *charset;
+	struct rufl_character_set *charset2;
+	struct rufl_unicode_map *umap;
+	rufl_code code;
+	font_f font;
+	font_scan_block block = { { 0, 0 }, { 0, 0 }, -1, { 0, 0, 0, 0 } };
+
+	charset = calloc(1, sizeof *charset);
+	if (!charset)
+		return rufl_OUT_OF_MEMORY;
+
+	umap = calloc(1, sizeof *umap);
+	if (!umap) {
+		free(charset);
+		return rufl_OUT_OF_MEMORY;
+	}
+
+	rufl_fm_error = xfont_find_font(font_name, 160, 160, 0, 0, &font, 0, 0);
+	if (rufl_fm_error) {
+		free(umap);
+		free(charset);
+		return rufl_FONT_MANAGER_ERROR;
+	}
+
+	code = rufl_init_read_encoding(font, umap);
+	if (code != rufl_OK) {
+		free(umap);
+		free(charset);
+		return code;
+	}
+
+	for (i = 0; i != 256; i++)
+		charset->index[i] = BLOCK_EMPTY;
+
+	for (i = 0; i != umap->entries; i++) {
+		u = umap->map[i].u;
+		string[0] = umap->map[i].c;
+		rufl_fm_error = xfont_scan_string(font, (char *) string,
+				font_RETURN_BBOX | font_GIVEN_FONT |
+				font_GIVEN_LENGTH | font_GIVEN_BLOCK,
+				0x7fffffff, 0x7fffffff,
+				&block, 0, 1,
+				0, &x_out, &y_out, 0);
+		if (rufl_fm_error)
+			break;
+
+		if (block.bbox.x0 == 0x20000000 ||
+				(x_out == 0 && y_out == 0 &&
+				block.bbox.x0 == 0 && block.bbox.y0 == 0 &&
+				block.bbox.x1 == 0 && block.bbox.y1 == 0)) {
+			/* absent */
+		} else {
+			/* present */
+			if (charset->index[u >> 8] == BLOCK_EMPTY) {
+				charset->index[u >> 8] = last_used;
+				last_used++;
+				if (last_used == 254)
+					/* too many characters */
+					break;
+			}
+
+			byte = (u >> 3) & 31;
+			bit = u & 7;
+			charset->block[last_used - 1][byte] |= 1 << bit;
+		}
+	}
+
+	xfont_lose_font(font);
+
+	if (rufl_fm_error) {
+		free(umap);
+		free(charset);
+		return rufl_FONT_MANAGER_ERROR;
+	}
+
+	/* shrink-wrap */
+	charset->size = offsetof(struct rufl_character_set, block) +
+			32 * last_used;
+	charset2 = realloc(charset, charset->size);
+	if (!charset2) {
+		free(umap);
+		free(charset);
+		return rufl_OUT_OF_MEMORY;
+	}
+
+	rufl_font_list[font_index].charset = charset;
+	rufl_font_list[font_index].umap = umap;
+
+	return rufl_OK;
+}
+
+
+/**
+ * Parse an encoding file and fill in a rufl_unicode_map.
+ */
+
+rufl_code rufl_init_read_encoding(font_f font,
+		struct rufl_unicode_map *umap)
+{
+	unsigned int u = 0;
+	unsigned int i = 0;
+	int c;
+	int n;
+	char filename[200];
+	char s[200];
+	struct rufl_glyph_map_entry *entry;
+	FILE *fp;
+
+	rufl_fm_error = xfont_read_encoding_filename(font, filename,
+			sizeof filename, 0);
+	if (rufl_fm_error)
+		return rufl_FONT_MANAGER_ERROR;
+
+	fp = fopen(filename, "r");
+	if (!fp && errno == ENOENT)
+		/* many "symbol" fonts have no encoding file: assume Latin 1 */
+		fp = fopen("Resources:$.Fonts.Encodings.Latin1", "r");
+	if (!fp)
+		return rufl_IO_ERROR;
+
+	while (!feof(fp) && u != 256) {
+		c = fgetc(fp);
+		if (c == '%') {
+			/* comment line */
+			fgets(s, sizeof s, fp);
+		} else if (c == '/') {
+			/* character definition */
+			if (i++ < 32)
+				continue;
+			n = fscanf(fp, "%100s", s);
+			if (n != 1)
+				break;
+			entry = bsearch(s, rufl_glyph_map,
+					rufl_glyph_map_size,
+					sizeof rufl_glyph_map[0],
+					rufl_glyph_map_cmp);
+			if (entry) {
+				umap->map[u].u = entry->u;
+				umap->map[u].c = i - 1;
+				u++;
+			}
+		}
+	}
+
+	if (fclose(fp) == EOF)
+		return rufl_IO_ERROR;
+
+	/* sort by unicode */
+	qsort(umap->map, u, sizeof umap->map[0], rufl_unicode_map_cmp);
+	umap->entries = u;
+
+	return rufl_OK;
+}
+
+
+int rufl_glyph_map_cmp(const void *keyval, const void *datum)
+{
+	const char *key = keyval;
+	const struct rufl_glyph_map_entry *entry = datum;
+	return strcmp(key, entry->glyph_name);
+}
+
+
+int rufl_unicode_map_cmp(const void *z1, const void *z2)
+{
+	const struct rufl_unicode_map_entry *entry1 = z1;
+	const struct rufl_unicode_map_entry *entry2 = z2;
+	if (entry1->u < entry2->u)
+		return -1;
+	else if (entry2->u < entry1->u)
+		return 1;
+	return 0;
+}
+
+
+/**
  * Construct the font substitution table.
  */
 
@@ -408,12 +622,26 @@ rufl_code rufl_init_substitution_table(void)
 rufl_code rufl_save_cache(void)
 {
 	unsigned int i;
+	const unsigned int version = rufl_CACHE_VERSION;
 	size_t len;
 	FILE *fp;
 
 	fp = fopen(rufl_CACHE, "wb");
 	if (!fp)
 		return rufl_IO_ERROR;
+
+	/* cache format version */
+	if (fwrite(&version, sizeof version, 1, fp) != 1) {
+		fclose(fp);
+		return rufl_IO_ERROR;
+	}
+
+	/* font manager type flag */
+	if (fwrite(&rufl_old_font_manager, sizeof rufl_old_font_manager, 1,
+			fp) != 1) {
+		fclose(fp);
+		return rufl_IO_ERROR;
+	}
 
 	for (i = 0; i != rufl_font_list_entries; i++) {
 		/* length of font identifier */
@@ -435,6 +663,16 @@ rufl_code rufl_save_cache(void)
 			fclose(fp);
 			return rufl_IO_ERROR;
 		}
+
+		/* unicode map */
+		if (rufl_old_font_manager) {
+			if (fwrite(rufl_font_list[i].umap,
+					sizeof *rufl_font_list[i].umap, 1,
+					fp) != 1) {
+				fclose(fp);
+				return rufl_IO_ERROR;
+			}
+		}
 	}
 
 	if (fclose(fp) == EOF)
@@ -451,11 +689,14 @@ rufl_code rufl_save_cache(void)
 rufl_code rufl_load_cache(void)
 {
 	bool eof;
+	unsigned int version;
+	bool old_font_manager;
 	char *identifier;
 	size_t len, size;
 	FILE *fp;
 	struct rufl_font_list_entry *entry;
 	struct rufl_character_set *charset;
+	struct rufl_unicode_map *umap = 0;
 
 	fp = fopen(rufl_CACHE, "rb");
 	if (!fp) {
@@ -463,6 +704,30 @@ rufl_code rufl_load_cache(void)
 			return rufl_OK;
 		else
 			return rufl_IO_ERROR;
+	}
+
+	/* cache format version */
+	if (fread(&version, sizeof version, 1, fp) != 1) {
+		eof = feof(fp);
+		fclose(fp);
+		return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+	}
+	if (version != rufl_CACHE_VERSION) {
+		/* incompatible cache format */
+		fclose(fp);
+		return rufl_OK;
+	}
+
+	/* font manager type flag */
+	if (fread(&old_font_manager, sizeof old_font_manager, 1, fp) != 1) {
+		eof = feof(fp);
+		fclose(fp);
+		return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+	}
+	if (old_font_manager != rufl_old_font_manager) {
+		/* font manager type has changed */
+		fclose(fp);
+		return rufl_OK;
 	}
 
 	while (!feof(fp)) {
@@ -513,14 +778,37 @@ rufl_code rufl_load_cache(void)
 			return eof ? rufl_IO_EOF : rufl_IO_ERROR;
 		}
 
+		/* unicode map */
+		if (rufl_old_font_manager) {
+			umap = malloc(sizeof *umap);
+			if (!umap) {
+				free(charset);
+				free(identifier);
+				fclose(fp);
+				return rufl_OUT_OF_MEMORY;
+			}
+
+			if (fread(umap, sizeof *umap, 1, fp) != 1) {
+				eof = feof(fp);
+				free(umap);
+				free(charset);
+				free(identifier);
+				fclose(fp);
+				return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+			}
+		}
+
 		/* put in rufl_font_list */
 		entry = bsearch(identifier, rufl_font_list,
 				rufl_font_list_entries,
 				sizeof rufl_font_list[0], rufl_font_list_cmp);
-		if (entry)
+		if (entry) {
 			entry->charset = charset;
-		else
+			entry->umap = umap;
+		} else {
+			free(umap);
 			free(charset);
+		}
 
                 free(identifier);
 	}
