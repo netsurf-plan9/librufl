@@ -51,7 +51,7 @@ struct rufl_unicode_map {
 	/** Number of valid entries in u and c. */
 	unsigned int entries;
 	/** Map from Unicode to character code. */
-	struct rufl_unicode_map_entry map[224];
+	struct rufl_unicode_map_entry map[256];
 };
 
 
@@ -156,7 +156,7 @@ unsigned int rufl_substitution_lookup(unsigned int c);
 	}
 
 #define rufl_CACHE "<Wimp$ScrapDir>.RUfl_cache"
-#define rufl_CACHE_VERSION 1
+#define rufl_CACHE_VERSION 2
 
 
 struct rufl_glyph_map_entry {

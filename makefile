@@ -22,8 +22,8 @@ all: rufl.o rufl_test,ff8 rufl_chars,ff8
 rufl.o: $(SOURCE) Glyphs
 	$(CC) $(CFLAGS) -c -o $@ $(SOURCE)
 
-rufl_glyph_map.c: Glyphs
-	./makeglyphs < $^ > $@
+rufl_glyph_map.c: Glyphs makeglyphs
+	./makeglyphs < Glyphs > $@
 
 rufl_test,ff8: rufl_test.c rufl.o
 	$(CC) $(CFLAGS) $(LIBS) -o $@ $^

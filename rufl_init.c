@@ -521,9 +521,18 @@ rufl_code rufl_init_read_encoding(font_f font,
 					sizeof rufl_glyph_map[0],
 					rufl_glyph_map_cmp);
 			if (entry) {
-				umap->map[u].u = entry->u;
-				umap->map[u].c = i - 1;
-				u++;
+				/* may be more than one unicode for the glyph
+				 * sentinels stop overshooting array */
+				while (strcmp(s, (entry - 1)->glyph_name) == 0)
+					entry--;
+				for (; strcmp(s, entry->glyph_name) == 0;
+						entry++) {
+					umap->map[u].u = entry->u;
+					umap->map[u].c = i - 1;
+					u++;
+					if (u == 256)
+						break;
+				}
 			}
 		}
 	}
