@@ -74,6 +74,17 @@ rufl_code rufl_width(const char *font_family, rufl_style font_style,
 
 
 /**
+ * Find where in a string a x coordinate falls.
+ */
+
+rufl_code rufl_x_to_offset(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int click_x,
+		size_t *char_offset, int *actual_x);
+
+
+/**
  * Dump the internal library state to stdout.
  */
 

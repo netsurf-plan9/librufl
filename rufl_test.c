@@ -19,6 +19,9 @@ int main(void)
 	char utf8_test[] = "Hello,	world! ὕαλον "
 			"Uherské Hradiště.";
 	int width;
+	size_t char_offset;
+	int x;
+	int actual_x;
 
 	try(rufl_init(), "rufl_init");
 	rufl_dump_state();
@@ -29,6 +32,14 @@ int main(void)
 			utf8_test, sizeof utf8_test - 1,
 			&width), "rufl_width");
 	printf("width: %i\n", width);
+	for (x = 0; x < width + 100; x += 100) {
+		try(rufl_x_to_offset("NewHall", rufl_REGULAR, 240,
+				utf8_test, sizeof utf8_test - 1,
+				x, &char_offset, &actual_x),
+				"rufl_x_to_offset");
+		printf("x to offset: %i -> %i %i \"%s\"\n", x, actual_x,
+				char_offset, utf8_test + char_offset);
+	}
 	rufl_quit();
 
 	return 0;
