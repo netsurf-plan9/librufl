@@ -274,8 +274,12 @@ rufl_code rufl_process_span(rufl_action action,
 				rufl_font_list[font].identifier);
 		rufl_fm_error = xfont_find_font(font_name,
 				font_size, font_size, 0, 0, &f, 0, 0);
-		if (rufl_fm_error)
+		if (rufl_fm_error) {
+			LOG("xfont_find_font: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
 			return rufl_FONT_MANAGER_ERROR;
+		}
 		/* place in cache */
 		code = rufl_place_in_cache(font, font_size, f);
 		if (code != rufl_OK)
@@ -293,8 +297,15 @@ rufl_code rufl_process_span(rufl_action action,
 				((flags & rufl_BLEND_FONT) ?
 						font_BLEND_FONT : 0),
 				*x, y, 0, trfm, n * 2);
-		if (rufl_fm_error)
+		if (rufl_fm_error) {
+			LOG("xfont_paint: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
+			for (i = 0; i != n; i++)
+				fprintf(stderr, "0x%x ", s[i]);
+			fprintf(stderr, " (%u)\n", n);
 			return rufl_FONT_MANAGER_ERROR;
+		}
 	}
 
 	/* increment x by width of span */
@@ -316,8 +327,12 @@ rufl_code rufl_process_span(rufl_action action,
 				0x7fffffff, 0x7fffffff, 0, trfm, n * 2,
 				0, &x_out, &y_out, 0);
 	}
-	if (rufl_fm_error)
+	if (rufl_fm_error) {
+		LOG("xfont_scan_string: 0x%x: %s",
+				rufl_fm_error->errnum,
+				rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
+	}
 	*x += x_out / 400;
 
 	return rufl_OK;
