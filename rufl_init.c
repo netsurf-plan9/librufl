@@ -73,7 +73,7 @@ static int rufl_font_list_cmp(const void *keyval, const void *datum);
 
 rufl_code rufl_init(void)
 {
-	bool changes = false;
+	unsigned int changes = 0;
 	unsigned int i;
 	rufl_code code;
 	font_f font;
@@ -107,9 +107,12 @@ rufl_code rufl_init(void)
 		xhourglass_off();
 		return code;
 	}
+	LOG("%u faces, %u families", rufl_font_list_entries,
+			rufl_family_list_entries);
 
 	code = rufl_load_cache();
 	if (code != rufl_OK) {
+		LOG("rufl_load_cache: 0x%x", code);
 		rufl_quit();
 		xhourglass_off();
 		return code;
@@ -119,36 +122,40 @@ rufl_code rufl_init(void)
 	for (i = 0; i != rufl_font_list_entries; i++) {
 		if (rufl_font_list[i].charset) {
 			/* character set loaded from cache */
-			/*LOG("font %u \"%s\" from cache", i,
-					rufl_font_list[i].identifier);*/
 			continue;
 		}
+		LOG("scanning %u \"%s\"", i, rufl_font_list[i].identifier);
 		xhourglass_percentage(100 * i / rufl_font_list_entries);
 		if (rufl_old_font_manager)
 			code = rufl_init_scan_font_old(i);
 		else
 			code = rufl_init_scan_font(i);
 		if (code != rufl_OK) {
+			LOG("rufl_init_scan_font: 0x%x", code);
 			rufl_quit();
 			xhourglass_off();
 			return code;
 		}
 		assert(rufl_font_list[i].charset);
-		changes = true;
+		changes++;
 	}
 
 	xhourglass_leds(2, 0, 0);
+	xhourglass_colours(0x0000ff, 0x00ffff, 0, 0);
 	code = rufl_init_substitution_table();
 	if (code != rufl_OK) {
+		LOG("rufl_init_substitution_table: 0x%x", code);
 		rufl_quit();
 		xhourglass_off();
 		return code;
 	}
 
 	if (changes) {
+		LOG("%u new charsets", changes);
 		xhourglass_leds(3, 0, 0);
 		code = rufl_save_cache();
 		if (code != rufl_OK) {
+			LOG("rufl_save_cache: 0x%x", code);
 			rufl_quit();
 			xhourglass_off();
 			return code;
@@ -417,11 +424,13 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 	font_f font;
 	font_scan_block block = { { 0, 0 }, { 0, 0 }, -1, { 0, 0, 0, 0 } };
 
-	LOG("font %u \"%s\"", font_index, font_name);
+	/*LOG("font %u \"%s\"", font_index, font_name);*/
 
 	charset = calloc(1, sizeof *charset);
 	if (!charset)
 		return rufl_OUT_OF_MEMORY;
+	for (i = 0; i != 256; i++)
+		charset->index[i] = BLOCK_EMPTY;
 
 	umap = calloc(1, sizeof *umap);
 	if (!umap) {
@@ -431,11 +440,11 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 
 	rufl_fm_error = xfont_find_font(font_name, 160, 160, 0, 0, &font, 0, 0);
 	if (rufl_fm_error) {
-		free(umap);
-		free(charset);
 		LOG("xfont_find_font(\"%s\"): 0x%x: %s", font_name,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
-		return rufl_FONT_MANAGER_ERROR;
+		free(umap);
+		rufl_font_list[font_index].charset = charset;
+		return rufl_OK;
 	}
 
 	code = rufl_init_read_encoding(font, umap);
@@ -444,9 +453,6 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 		free(charset);
 		return code;
 	}
-
-	for (i = 0; i != 256; i++)
-		charset->index[i] = BLOCK_EMPTY;
 
 	for (i = 0; i != umap->entries; i++) {
 		u = umap->map[i].u;
@@ -618,8 +624,11 @@ rufl_code rufl_init_substitution_table(void)
 
 	rufl_substitution_table = malloc(65536 *
 			sizeof rufl_substitution_table[0]);
-	if (!rufl_substitution_table)
+	if (!rufl_substitution_table) {
+		LOG("malloc(%u) failed", 65536 *
+				sizeof rufl_substitution_table[0]);
 		return rufl_OUT_OF_MEMORY;
+	}
 
 	for (u = 0; u != 0x10000; u++)
 		rufl_substitution_table[u] = NOT_AVAILABLE;
@@ -670,41 +679,48 @@ rufl_code rufl_save_cache(void)
 	FILE *fp;
 
 	fp = fopen(rufl_CACHE, "wb");
-	if (!fp)
-		return rufl_IO_ERROR;
+	if (!fp) {
+		LOG("fopen: 0x%x: %s", errno, strerror(errno));
+		return rufl_OK;
+	}
 
 	/* cache format version */
 	if (fwrite(&version, sizeof version, 1, fp) != 1) {
+		LOG("fwrite: 0x%x: %s", errno, strerror(errno));
 		fclose(fp);
-		return rufl_IO_ERROR;
+		return rufl_OK;
 	}
 
 	/* font manager type flag */
 	if (fwrite(&rufl_old_font_manager, sizeof rufl_old_font_manager, 1,
 			fp) != 1) {
+		LOG("fwrite: 0x%x: %s", errno, strerror(errno));
 		fclose(fp);
-		return rufl_IO_ERROR;
+		return rufl_OK;
 	}
 
 	for (i = 0; i != rufl_font_list_entries; i++) {
 		/* length of font identifier */
 		len = strlen(rufl_font_list[i].identifier);
 		if (fwrite(&len, sizeof len, 1, fp) != 1) {
+			LOG("fwrite: 0x%x: %s", errno, strerror(errno));
 			fclose(fp);
-			return rufl_IO_ERROR;
+			return rufl_OK;
 		}
 
 		/* font identifier */
 		if (fwrite(rufl_font_list[i].identifier, len, 1, fp) != 1) {
+			LOG("fwrite: 0x%x: %s", errno, strerror(errno));
 			fclose(fp);
-			return rufl_IO_ERROR;
+			return rufl_OK;
 		}
 
 		/* character set */
 		if (fwrite(rufl_font_list[i].charset,
 				rufl_font_list[i].charset->size, 1, fp) != 1) {
+			LOG("fwrite: 0x%x: %s", errno, strerror(errno));
 			fclose(fp);
-			return rufl_IO_ERROR;
+			return rufl_OK;
 		}
 
 		/* unicode map */
@@ -712,14 +728,19 @@ rufl_code rufl_save_cache(void)
 			if (fwrite(rufl_font_list[i].umap,
 					sizeof *rufl_font_list[i].umap, 1,
 					fp) != 1) {
+				LOG("fwrite: 0x%x: %s", errno, strerror(errno));
 				fclose(fp);
-				return rufl_IO_ERROR;
+				return rufl_OK;
 			}
 		}
 	}
 
-	if (fclose(fp) == EOF)
-		return rufl_IO_ERROR;
+	if (fclose(fp) == EOF) {
+		LOG("fclose: 0x%x: %s", errno, strerror(errno));
+		return rufl_OK;
+	}
+
+	LOG("%u charsets saved", i);
 
 	return rufl_OK;
 }
@@ -731,8 +752,8 @@ rufl_code rufl_save_cache(void)
 
 rufl_code rufl_load_cache(void)
 {
-	bool eof;
 	unsigned int version;
+	unsigned int i = 0;
 	bool old_font_manager;
 	char *identifier;
 	size_t len, size;
@@ -743,32 +764,39 @@ rufl_code rufl_load_cache(void)
 
 	fp = fopen(rufl_CACHE, "rb");
 	if (!fp) {
-		if (errno == ENOENT)
-			return rufl_OK;
-		else
-			return rufl_IO_ERROR;
+		LOG("fopen: 0x%x: %s", errno, strerror(errno));
+		return rufl_OK;
 	}
 
 	/* cache format version */
 	if (fread(&version, sizeof version, 1, fp) != 1) {
-		eof = feof(fp);
+		if (feof(fp))
+			LOG("fread: %s", "unexpected eof");
+		else
+			LOG("fread: 0x%x: %s", errno, strerror(errno));
 		fclose(fp);
-		return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+		return rufl_OK;
 	}
 	if (version != rufl_CACHE_VERSION) {
 		/* incompatible cache format */
+		LOG("cache version %u (now %u)", version, rufl_CACHE_VERSION);
 		fclose(fp);
 		return rufl_OK;
 	}
 
 	/* font manager type flag */
 	if (fread(&old_font_manager, sizeof old_font_manager, 1, fp) != 1) {
-		eof = feof(fp);
+		if (feof(fp))
+			LOG("fread: %s", "unexpected eof");
+		else
+			LOG("fread: 0x%x: %s", errno, strerror(errno));
 		fclose(fp);
-		return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+		return rufl_OK;
 	}
 	if (old_font_manager != rufl_old_font_manager) {
 		/* font manager type has changed */
+		LOG("font manager %u (now %u)", old_font_manager,
+				rufl_old_font_manager);
 		fclose(fp);
 		return rufl_OK;
 	}
@@ -776,37 +804,44 @@ rufl_code rufl_load_cache(void)
 	while (!feof(fp)) {
 		/* length of font identifier */
 		if (fread(&len, sizeof len, 1, fp) != 1) {
-			if (feof(fp))
-				break;
-			fclose(fp);
-			return rufl_IO_ERROR;
+			/* eof at this point simply means that the whole cache
+			 * file has been loaded */
+			if (!feof(fp))
+				LOG("fread: 0x%x: %s", errno, strerror(errno));
+			break;
 		}
 
 		identifier = malloc(len + 1);
 		if (!identifier) {
+			LOG("malloc(%u) failed", len + 1);
 			fclose(fp);
 			return rufl_OUT_OF_MEMORY;
 		}
 
 		/* font identifier */
 		if (fread(identifier, len, 1, fp) != 1) {
-			eof = feof(fp);
+			if (feof(fp))
+				LOG("fread: %s", "unexpected eof");
+			else
+				LOG("fread: 0x%x: %s", errno, strerror(errno));
 			free(identifier);
-			fclose(fp);
-			return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+			break;
 		}
 		identifier[len] = 0;
 
 		/* character set */
 		if (fread(&size, sizeof size, 1, fp) != 1) {
-			eof = feof(fp);
+			if (feof(fp))
+				LOG("fread: %s", "unexpected eof");
+			else
+				LOG("fread: 0x%x: %s", errno, strerror(errno));
 			free(identifier);
-			fclose(fp);
-			return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+			break;
 		}
 
 		charset = malloc(size);
 		if (!charset) {
+			LOG("malloc(%u) failed", size);
 			free(identifier);
 			fclose(fp);
 			return rufl_OUT_OF_MEMORY;
@@ -814,17 +849,20 @@ rufl_code rufl_load_cache(void)
 
 		charset->size = size;
 		if (fread(charset->index, size - sizeof size, 1, fp) != 1) {
-			eof = feof(fp);
+			if (feof(fp))
+				LOG("fread: %s", "unexpected eof");
+			else
+				LOG("fread: 0x%x: %s", errno, strerror(errno));
 			free(charset);
 			free(identifier);
-			fclose(fp);
-			return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+			break;
 		}
 
 		/* unicode map */
 		if (rufl_old_font_manager) {
 			umap = malloc(sizeof *umap);
 			if (!umap) {
+				LOG("malloc(%u) failed", sizeof *umap);
 				free(charset);
 				free(identifier);
 				fclose(fp);
@@ -832,12 +870,15 @@ rufl_code rufl_load_cache(void)
 			}
 
 			if (fread(umap, sizeof *umap, 1, fp) != 1) {
-				eof = feof(fp);
+				if (feof(fp))
+					LOG("fread: %s", "unexpected eof");
+				else
+					LOG("fread: 0x%x: %s", errno,
+							strerror(errno));
 				free(umap);
 				free(charset);
 				free(identifier);
-				fclose(fp);
-				return eof ? rufl_IO_EOF : rufl_IO_ERROR;
+				break;
 			}
 		}
 
@@ -848,16 +889,18 @@ rufl_code rufl_load_cache(void)
 		if (entry) {
 			entry->charset = charset;
 			entry->umap = umap;
+	                i++;
 		} else {
+			LOG("\"%s\" not in font list", identifier);
 			free(umap);
 			free(charset);
 		}
 
                 free(identifier);
 	}
+	fclose(fp);
 
-	if (fclose(fp) == EOF)
-		return rufl_IO_ERROR;
+	LOG("%u charsets loaded", i);
 
 	return rufl_OK;
 }

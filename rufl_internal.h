@@ -156,5 +156,5 @@ extern const size_t rufl_glyph_map_size;
 		__PRETTY_FUNCTION__, __LINE__), fprintf(stderr, format, \
 		__VA_ARGS__), fprintf(stderr, "\n"))
 #else
-#define LOG(format, ...)
+#define LOG(format, ...) ((void) 0)
 #endif
