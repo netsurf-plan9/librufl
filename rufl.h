@@ -103,6 +103,17 @@ rufl_code rufl_x_to_offset(const char *font_family, rufl_style font_style,
 
 
 /**
+ * Find the prefix of a string that will fit in a specified width.
+ */
+
+rufl_code rufl_split(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int width,
+		size_t *char_offset, int *actual_x);
+
+
+/**
  * Dump the internal library state to stdout.
  */
 

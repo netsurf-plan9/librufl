@@ -14,7 +14,8 @@
 #include "rufl_internal.h"
 
 
-typedef enum { rufl_PAINT, rufl_WIDTH, rufl_X_TO_OFFSET } rufl_action;
+typedef enum { rufl_PAINT, rufl_WIDTH, rufl_X_TO_OFFSET,
+		rufl_SPLIT } rufl_action;
 #define rufl_PROCESS_CHUNK 200
 
 bool rufl_can_background_blend = false;
@@ -114,6 +115,23 @@ rufl_code rufl_x_to_offset(const char *font_family, rufl_style font_style,
 
 
 /**
+ * Find the prefix of a string that will fit in a specified width.
+ */
+
+rufl_code rufl_split(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int width,
+		size_t *char_offset, int *actual_x)
+{
+	return rufl_process(rufl_SPLIT,
+			font_family, font_style, font_size, string,
+			length, 0, 0, 0, 0, 0,
+			width, char_offset, actual_x);
+}
+
+
+/**
  * Render, measure, or split Unicode text.
  */
 
@@ -140,23 +158,26 @@ rufl_code rufl_process(rufl_action action,
 	assert(action == rufl_PAINT ||
 			(action == rufl_WIDTH && width) ||
 			(action == rufl_X_TO_OFFSET && char_offset &&
+					actual_x) ||
+			(action == rufl_SPLIT && char_offset &&
 					actual_x));
 
 	if ((flags & rufl_BLEND_FONT) && !rufl_can_background_blend) {
-			/* unsuitable FM => clear blending bit */
-			flags &= ~rufl_BLEND_FONT;
+		/* unsuitable FM => clear blending bit */
+		flags &= ~rufl_BLEND_FONT;
 	}
 
 	if (length == 0) {
 		if (action == rufl_WIDTH)
 			*width = 0;
-		else if (action == rufl_X_TO_OFFSET) {
+		else if (action == rufl_X_TO_OFFSET || action == rufl_SPLIT) {
 			*char_offset = 0;
 			*actual_x = 0;
 		}
 		return rufl_OK;
 	}
-	if (action == rufl_X_TO_OFFSET && click_x <= 0) {
+	if ((action == rufl_X_TO_OFFSET || action == rufl_SPLIT) &&
+			click_x <= 0) {
 		*char_offset = 0;
 		*actual_x = 0;
 		return rufl_OK;
@@ -215,7 +236,8 @@ rufl_code rufl_process(rufl_action action,
 					font_size, &x, y, trfm, flags,
 					click_x, &offset);
 
-		if (action == rufl_X_TO_OFFSET && (offset < n || click_x < x))
+		if ((action == rufl_X_TO_OFFSET || action == rufl_SPLIT) &&
+				(offset < n || click_x < x))
 			break;
 		if (code != rufl_OK)
 			return code;
@@ -224,7 +246,7 @@ rufl_code rufl_process(rufl_action action,
 
 	if (action == rufl_WIDTH)
 		*width = x;
-	else if (action == rufl_X_TO_OFFSET) {
+	else if (action == rufl_X_TO_OFFSET || action == rufl_SPLIT) {
 		*char_offset = offset_map[offset];
 		*actual_x = x;
 	}
@@ -309,12 +331,13 @@ rufl_code rufl_process_span(rufl_action action,
 	}
 
 	/* increment x by width of span */
-	if (action == rufl_X_TO_OFFSET) {
+	if (action == rufl_X_TO_OFFSET || action == rufl_SPLIT) {
 		rufl_fm_error = xfont_scan_string(f, (const char *) s,
 				(trfm ? font_GIVEN_TRFM : 0) |
 				font_GIVEN_LENGTH | font_GIVEN_FONT |
 				font_KERN | font_GIVEN16_BIT |
-				font_RETURN_CARET_POS,
+				((action == rufl_X_TO_OFFSET) ?
+						font_RETURN_CARET_POS : 0),
 				(click_x - *x) * 400, 0x7fffffff, 0, trfm,
 				n * 2,
 				(char **) &split_point, &x_out, &y_out, 0);
@@ -405,11 +428,13 @@ rufl_code rufl_process_span_old(rufl_action action,
 	}
 
 	/* increment x by width of span */
-	if (action == rufl_X_TO_OFFSET) {
+	if (action == rufl_X_TO_OFFSET || action == rufl_SPLIT) {
 		rufl_fm_error = xfont_scan_string(f, s2,
 				(trfm ? font_GIVEN_TRFM : 0) |
 				font_GIVEN_LENGTH | font_GIVEN_FONT |
-				font_KERN | font_RETURN_CARET_POS,
+				font_KERN |
+				((action == rufl_X_TO_OFFSET) ?
+						font_RETURN_CARET_POS : 0),
 				(click_x - *x) * 400, 0x7fffffff, 0, trfm, n,
 				&split_point, &x_out, &y_out, 0);
 		*offset = split_point - s2;
@@ -460,7 +485,7 @@ rufl_code rufl_process_not_available(rufl_action action,
 	if (action == rufl_WIDTH) {
 		*x += n * dx;
 		return rufl_OK;
-	} else if (action == rufl_X_TO_OFFSET) {
+	} else if (action == rufl_X_TO_OFFSET || action == rufl_SPLIT) {
 		if (click_x - *x < (int) (n * dx))
 			*offset = (click_x - *x) / dx;
 		else
