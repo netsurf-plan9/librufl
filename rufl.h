@@ -5,6 +5,9 @@
  * Copyright 2005 James Bursa <james@semichrome.net>
  */
 
+#ifndef RUFL_H
+#define RUFL_H
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include "oslib/os.h"
@@ -28,10 +31,10 @@ typedef enum {
 
 
 typedef enum {
-	rufl_REGULAR,
-	rufl_SLANTED,
-	rufl_BOLD,
-	rufl_BOLD_SLANTED,
+	rufl_REGULAR = 0,
+	rufl_SLANTED = 1,
+	rufl_BOLD = 2,
+	rufl_BOLD_SLANTED = 3,
 } rufl_style;
 
 
@@ -61,6 +64,19 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 		unsigned int font_size,
 		const char *string, size_t length,
 		int x, int y);
+
+
+/**
+ * Render Unicode text with a transformation matrix.
+ *
+ * Only transformations which keep the x-axis direction unchanged are
+ * supported.
+ */
+
+rufl_code rufl_paint_transformed(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int x, int y, os_trfm *trfm);
 
 
 /**
@@ -96,3 +112,6 @@ void rufl_dump_state(void);
  */
 
 void rufl_quit(void);
+
+
+#endif
