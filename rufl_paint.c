@@ -365,10 +365,8 @@ rufl_code rufl_process_span_old(rufl_action action,
 				(trfm ? font_GIVEN_TRFM : 0) |
 				font_GIVEN_LENGTH | font_GIVEN_FONT | font_KERN,
 				*x, y, 0, trfm, n);
-		if (rufl_fm_error) {
-			xfont_lose_font(f);
+		if (rufl_fm_error)
 			return rufl_FONT_MANAGER_ERROR;
-		}
 	}
 
 	/* increment x by width of span */
@@ -387,10 +385,8 @@ rufl_code rufl_process_span_old(rufl_action action,
 				0x7fffffff, 0x7fffffff, 0, trfm, n,
 				0, &x_out, &y_out, 0);
 	}
-	if (rufl_fm_error) {
-		xfont_lose_font(f);
+	if (rufl_fm_error)
 		return rufl_FONT_MANAGER_ERROR;
-	}
 	*x += x_out / 400;
 
 	return rufl_OK;
@@ -513,9 +509,11 @@ rufl_code rufl_place_in_cache(unsigned int font, unsigned int font_size,
 			evict = i;
 		}
 	}
-	rufl_fm_error = xfont_lose_font(rufl_cache[evict].f);
-	if (rufl_fm_error)
-		return rufl_FONT_MANAGER_ERROR;
+	if (rufl_cache[evict].font != rufl_CACHE_NONE) {
+		rufl_fm_error = xfont_lose_font(rufl_cache[evict].f);
+		if (rufl_fm_error)
+			return rufl_FONT_MANAGER_ERROR;
+	}
 	rufl_cache[evict].font = font;
 	rufl_cache[evict].size = font_size;
 	rufl_cache[evict].f = f;
