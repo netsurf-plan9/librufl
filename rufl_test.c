@@ -17,7 +17,7 @@ static void try(rufl_code code, const char *context);
 int main(void)
 {
 	char utf8_test[] = "Hello,	world! ὕαλον "
-			"Uherské Hradiště.";
+			"Uherské Hradiště. 𐀀";
 	int width;
 	size_t char_offset;
 	int x;
@@ -27,7 +27,7 @@ int main(void)
 	rufl_dump_state();
 	try(rufl_paint("NewHall", rufl_REGULAR, 240,
 			utf8_test, sizeof utf8_test - 1,
-			1200, 1200, 0), "rufl_paint");
+			1200, 1000, 0), "rufl_paint");
 	try(rufl_width("NewHall", rufl_REGULAR, 240,
 			utf8_test, sizeof utf8_test - 1,
 			&width), "rufl_width");

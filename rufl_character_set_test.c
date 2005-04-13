@@ -23,7 +23,7 @@ bool rufl_character_set_test(struct rufl_character_set *charset,
 	unsigned int byte = (c >> 3) & 31;
 	unsigned int bit = c & 7;
 
-	if (256 < block)
+	if (256 <= block)
 		return false;
 
 	if (charset->index[block] == BLOCK_EMPTY)
