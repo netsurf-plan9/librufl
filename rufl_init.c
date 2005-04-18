@@ -78,6 +78,7 @@ rufl_code rufl_init(void)
 	int fm_version;
 	rufl_code code;
 	font_f font;
+	os_colour old_sand, old_glass;
 
 	if (rufl_font_list_entries)
 		/* already initialized */
@@ -148,7 +149,7 @@ rufl_code rufl_init(void)
 	}
 
 	xhourglass_leds(2, 0, 0);
-	xhourglass_colours(0x0000ff, 0x00ffff, 0, 0);
+	xhourglass_colours(0x0000ff, 0x00ffff, &old_sand, &old_glass);
 	code = rufl_init_substitution_table();
 	if (code != rufl_OK) {
 		LOG("rufl_init_substitution_table: 0x%x", code);
@@ -156,6 +157,7 @@ rufl_code rufl_init(void)
 		xhourglass_off();
 		return code;
 	}
+	xhourglass_colours(old_sand, old_glass, 0, 0);
 
 	if (changes) {
 		LOG("%u new charsets", changes);
