@@ -546,7 +546,7 @@ rufl_code rufl_init_read_encoding(font_f font,
 	}
 
 	fp = fopen(filename, "r");
-	if (!fp && errno == ENOENT)
+	if (!fp)
 		/* many "symbol" fonts have no encoding file: assume Latin 1 */
 		fp = fopen("Resources:$.Fonts.Encodings.Latin1", "r");
 	if (!fp)

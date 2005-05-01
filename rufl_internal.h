@@ -8,6 +8,9 @@
 #include <limits.h>
 #include "oslib/font.h"
 #include "rufl.h"
+#ifdef __CC_NORCROFT
+#include "strfuncs.h"
+#endif
 
 
 /** The available characters in a font. The range which can be represented is
@@ -154,6 +157,9 @@ extern const size_t rufl_glyph_map_size;
 
 
 #ifndef NDEBUG
+#ifdef __CC_NORCROFT
+#define __PRETTY_FUNCTION__ __func__
+#endif
 #define LOG(format, ...) (fprintf(stderr, __FILE__ " %s %i: ", \
 		__PRETTY_FUNCTION__, __LINE__), fprintf(stderr, format, \
 		__VA_ARGS__), fprintf(stderr, "\n"))
