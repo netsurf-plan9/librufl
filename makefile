@@ -38,6 +38,7 @@ LDFLAGS = -aof
 LIBS = OSLib:o.oslib32
 MKDLK = makedlk
 SOURCE += strfuncs.c
+OBJS = $(SOURCE:.c=.o)
 
 all: rufl.o rufl/pyd rufl_test,ff8 rufl_chars,ff8
 rufl.o: o.rufl
