@@ -12,6 +12,10 @@
 
 
 static void try(rufl_code code, const char *context);
+static void callback(void *context,
+		const char *font_name, unsigned int font_size,
+		const char *s8, unsigned short *s16, unsigned int n,
+		int x, int y);
 
 
 int main(void)
@@ -46,6 +50,9 @@ int main(void)
 		printf("split: %i -> %i %i \"%s\"\n", x, actual_x,
 				char_offset, utf8_test + char_offset);
 	}
+	try(rufl_paint_callback("NewHall", rufl_REGULAR, 240,
+			utf8_test, sizeof utf8_test - 1,
+			1200, 1000, callback, 0), "rufl_paint_callback");
 	rufl_quit();
 
 	return 0;
@@ -73,4 +80,22 @@ void try(rufl_code code, const char *context)
 		printf("error: %s: unknown error\n", context);
 	rufl_quit();
 	exit(1);
+}
+
+
+void callback(void *context,
+		const char *font_name, unsigned int font_size,
+		const char *s8, unsigned short *s16, unsigned int n,
+		int x, int y)
+{
+	printf("callback: \"%s\", %u, ", font_name, font_size);
+	if (s8)
+		printf("s8 \"%.*s\" ", n, s8);
+	else {
+		printf("s16 \"");
+		for (unsigned int i = 0; i != n; i++)
+			printf("%x ", (unsigned int) s16[i]);
+		printf("\" ");
+	}
+	printf("%i %i\n", x, y);
 }

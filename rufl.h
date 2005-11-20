@@ -113,6 +113,24 @@ rufl_code rufl_split(const char *font_family, rufl_style font_style,
 		size_t *char_offset, int *actual_x);
 
 
+/** Type of callback function for rufl_paint_callback(). */
+typedef void (*rufl_callback_t)(void *context,
+		const char *font_name, unsigned int font_size,
+		const char *s8, unsigned short *s16, unsigned int n,
+		int x, int y);
+
+
+/**
+ * Render text, but call a callback instead of each call to Font_Paint.
+ */
+
+rufl_code rufl_paint_callback(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int x, int y,
+		rufl_callback_t callback, void *context);
+
+
 /**
  * Dump the internal library state to stdout.
  */

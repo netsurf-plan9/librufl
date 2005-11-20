@@ -15,7 +15,7 @@
 
 
 typedef enum { rufl_PAINT, rufl_WIDTH, rufl_X_TO_OFFSET,
-		rufl_SPLIT } rufl_action;
+		rufl_SPLIT, rufl_PAINT_CALLBACK } rufl_action;
 #define rufl_PROCESS_CHUNK 200
 
 bool rufl_can_background_blend = false;
@@ -26,24 +26,28 @@ static rufl_code rufl_process(rufl_action action,
 		unsigned int font_size,
 		const char *string0, size_t length,
 		int x, int y, os_trfm *trfm, unsigned int flags,
-		int *width, int click_x, size_t *char_offset, int *actual_x);
+		int *width, int click_x, size_t *char_offset, int *actual_x,
+		rufl_callback_t callback, void *context);
 static int rufl_family_list_cmp(const void *keyval, const void *datum);
 static rufl_code rufl_process_span(rufl_action action,
 		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y,
 		os_trfm *trfm, unsigned int flags,
-		int click_x, size_t *offset);
+		int click_x, size_t *offset,
+		rufl_callback_t callback, void *context);
 static rufl_code rufl_process_span_old(rufl_action action,
 		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y,
 		os_trfm *trfm, unsigned int flags,
-		int click_x, size_t *offset);
+		int click_x, size_t *offset,
+		rufl_callback_t callback, void *context);
 static int rufl_unicode_map_search_cmp(const void *keyval, const void *datum);
 static rufl_code rufl_process_not_available(rufl_action action,
 		unsigned short *s, unsigned int n,
 		unsigned int font_size, int *x, int y,
 		os_trfm *trfm, unsigned int flags,
-		int click_x, size_t *offset);
+		int click_x, size_t *offset,
+		rufl_callback_t callback, void *context);
 static rufl_code rufl_place_in_cache(unsigned int font, unsigned int font_size,
 		font_f f);
 
@@ -59,7 +63,7 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 {
 	return rufl_process(rufl_PAINT,
 			font_family, font_style, font_size, string,
-			length, x, y, 0, flags, 0, 0, 0, 0);
+			length, x, y, 0, flags, 0, 0, 0, 0, 0, 0);
 }
 
 
@@ -77,7 +81,7 @@ rufl_code rufl_paint_transformed(const char *font_family, rufl_style font_style,
 {
 	return rufl_process(rufl_PAINT,
 			font_family, font_style, font_size, string,
-			length, x, y, trfm, flags, 0, 0, 0, 0);
+			length, x, y, trfm, flags, 0, 0, 0, 0, 0, 0);
 }
 
 
@@ -92,7 +96,7 @@ rufl_code rufl_width(const char *font_family, rufl_style font_style,
 {
 	return rufl_process(rufl_WIDTH,
 			font_family, font_style, font_size, string,
-			length, 0, 0, 0, 0, width, 0, 0, 0);
+			length, 0, 0, 0, 0, width, 0, 0, 0, 0, 0);
 }
 
 
@@ -110,7 +114,7 @@ rufl_code rufl_x_to_offset(const char *font_family, rufl_style font_style,
 	return rufl_process(rufl_X_TO_OFFSET,
 			font_family, font_style, font_size, string,
 			length, 0, 0, 0, 0, 0,
-			click_x, char_offset, actual_x);
+			click_x, char_offset, actual_x, 0, 0);
 }
 
 
@@ -127,7 +131,23 @@ rufl_code rufl_split(const char *font_family, rufl_style font_style,
 	return rufl_process(rufl_SPLIT,
 			font_family, font_style, font_size, string,
 			length, 0, 0, 0, 0, 0,
-			width, char_offset, actual_x);
+			width, char_offset, actual_x, 0, 0);
+}
+
+
+/**
+ * Render text, but call a callback instead of each call to Font_Paint.
+ */
+
+rufl_code rufl_paint_callback(const char *font_family, rufl_style font_style,
+		unsigned int font_size,
+		const char *string, size_t length,
+		int x, int y,
+		rufl_callback_t callback, void *context)
+{
+	return rufl_process(rufl_PAINT_CALLBACK,
+			font_family, font_style, font_size, string,
+			length, x, y, 0, 0, 0, 0, 0, 0, callback, context);
 }
 
 
@@ -140,7 +160,8 @@ rufl_code rufl_process(rufl_action action,
 		unsigned int font_size,
 		const char *string0, size_t length,
 		int x, int y, os_trfm *trfm, unsigned int flags,
-		int *width, int click_x, size_t *char_offset, int *actual_x)
+		int *width, int click_x, size_t *char_offset, int *actual_x,
+		rufl_callback_t callback, void *context)
 {
 	unsigned short s[rufl_PROCESS_CHUNK];
 	unsigned int font;
@@ -160,7 +181,8 @@ rufl_code rufl_process(rufl_action action,
 			(action == rufl_X_TO_OFFSET && char_offset &&
 					actual_x) ||
 			(action == rufl_SPLIT && char_offset &&
-					actual_x));
+					actual_x) ||
+			(action == rufl_PAINT_CALLBACK && callback));
 
 	if ((flags & rufl_BLEND_FONT) && !rufl_can_background_blend) {
 		/* unsuitable FM => clear blending bit */
@@ -230,15 +252,15 @@ rufl_code rufl_process(rufl_action action,
 		if (font0 == NOT_AVAILABLE)
 			code = rufl_process_not_available(action, s, n,
 					font_size, &x, y, trfm, flags,
-					click_x, &offset);
+					click_x, &offset, callback, context);
 		else if (rufl_old_font_manager)
 			code = rufl_process_span_old(action, s, n, font0,
 					font_size, &x, y, trfm, flags,
-					click_x, &offset);
+					click_x, &offset, callback, context);
 		else
 			code = rufl_process_span(action, s, n, font0,
 					font_size, &x, y, trfm, flags,
-					click_x, &offset);
+					click_x, &offset, callback, context);
 
 		if ((action == rufl_X_TO_OFFSET || action == rufl_SPLIT) &&
 				(offset < n || click_x < x))
@@ -275,7 +297,8 @@ rufl_code rufl_process_span(rufl_action action,
 		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y,
 		os_trfm *trfm, unsigned int flags,
-		int click_x, size_t *offset)
+		int click_x, size_t *offset,
+		rufl_callback_t callback, void *context)
 {
 	char font_name[80];
 	unsigned short *split_point;
@@ -332,6 +355,10 @@ rufl_code rufl_process_span(rufl_action action,
 			fprintf(stderr, " (%u)\n", n);
 			return rufl_FONT_MANAGER_ERROR;
 		}
+	} else if (action == rufl_PAINT_CALLBACK) {
+		snprintf(font_name, sizeof font_name, "%s\\EUTF8",
+				rufl_font_list[font].identifier);
+		callback(context, font_name, font_size, 0, s, n, *x, y);
 	}
 
 	/* increment x by width of span */
@@ -375,7 +402,8 @@ rufl_code rufl_process_span_old(rufl_action action,
 		unsigned short *s, unsigned int n,
 		unsigned int font, unsigned int font_size, int *x, int y,
 		os_trfm *trfm, unsigned int flags,
-		int click_x, size_t *offset)
+		int click_x, size_t *offset,
+		rufl_callback_t callback, void *context)
 {
 	char s2[rufl_PROCESS_CHUNK];
 	char *split_point;
@@ -429,6 +457,8 @@ rufl_code rufl_process_span_old(rufl_action action,
 				*x, y, 0, trfm, n);
 		if (rufl_fm_error)
 			return rufl_FONT_MANAGER_ERROR;
+	} else if (action == rufl_PAINT_CALLBACK) {
+		callback(context, font_name, font_size, s2, 0, n, *x, y);
 	}
 
 	/* increment x by width of span */
@@ -477,11 +507,14 @@ rufl_code rufl_process_not_available(rufl_action action,
 		unsigned short *s, unsigned int n,
 		unsigned int font_size, int *x, int y,
 		os_trfm *trfm, unsigned int flags,
-		int click_x, size_t *offset)
+		int click_x, size_t *offset,
+		rufl_callback_t callback, void *context)
 {
 	char missing[] = "0000";
 	int dx = 7 * font_size *
 			(trfm ? trfm->entries[0][0] / 0x10000 : 1) / 64;
+	int top_y = y + (trfm ? trfm->entries[1][1] / 0x10000 : 1) * 5 *
+			font_size / 64;
 	unsigned int i;
 	font_f f;
 	rufl_code code;
@@ -498,27 +531,31 @@ rufl_code rufl_process_not_available(rufl_action action,
 		return rufl_OK;
 	}
 
-	/* search cache */
-	for (i = 0; i != rufl_CACHE_SIZE; i++) {
-		if (rufl_cache[i].font == rufl_CACHE_CORPUS &&
-				rufl_cache[i].size == font_size)
-			break;
-	}
-	if (i != rufl_CACHE_SIZE) {
-		/* found in cache */
-		f = rufl_cache[i].f;
-		rufl_cache[i].last_used = rufl_cache_time++;
-	} else {
-		/* not found */
-		rufl_fm_error = xfont_find_font("Corpus.Medium\\ELatin1",
-				font_size / 2, font_size / 2, 0, 0,
-				&f, 0, 0);
-		if (rufl_fm_error)
-			return rufl_FONT_MANAGER_ERROR;
-		/* place in cache */
-		code = rufl_place_in_cache(rufl_CACHE_CORPUS, font_size, f);
-		if (code != rufl_OK)
-			return code;
+	if (action == rufl_PAINT) {
+		/* search cache */
+		for (i = 0; i != rufl_CACHE_SIZE; i++) {
+			if (rufl_cache[i].font == rufl_CACHE_CORPUS &&
+					rufl_cache[i].size == font_size)
+				break;
+		}
+		if (i != rufl_CACHE_SIZE) {
+			/* found in cache */
+			f = rufl_cache[i].f;
+			rufl_cache[i].last_used = rufl_cache_time++;
+		} else {
+			/* not found */
+			rufl_fm_error = xfont_find_font(
+					"Corpus.Medium\\ELatin1",
+					font_size / 2, font_size / 2, 0, 0,
+					&f, 0, 0);
+			if (rufl_fm_error)
+				return rufl_FONT_MANAGER_ERROR;
+			/* place in cache */
+			code = rufl_place_in_cache(rufl_CACHE_CORPUS,
+					font_size, f);
+			if (code != rufl_OK)
+				return code;
+		}
 	}
 
 	for (i = 0; i != n; i++) {
@@ -528,28 +565,39 @@ rufl_code rufl_process_not_available(rufl_action action,
 		missing[3] = "0123456789abcdef"[(s[i] >> 0) & 0xf];
 
 		/* first two characters in top row */
-		rufl_fm_error = xfont_paint(f, missing, font_OS_UNITS |
-				(trfm ? font_GIVEN_TRFM : 0) |
-				font_GIVEN_LENGTH | font_GIVEN_FONT |
-				font_KERN |
-				((flags & rufl_BLEND_FONT) ?
-						font_BLEND_FONT : 0),
-				*x, y + (trfm ? trfm->entries[1][1] / 0x10000 :
-				1) * 5 * font_size / 64,
-				0, trfm, 2);
-		if (rufl_fm_error)
-			return rufl_FONT_MANAGER_ERROR;
+		if (action == rufl_PAINT) {
+			rufl_fm_error = xfont_paint(f, missing, font_OS_UNITS |
+					(trfm ? font_GIVEN_TRFM : 0) |
+					font_GIVEN_LENGTH | font_GIVEN_FONT |
+					font_KERN |
+					((flags & rufl_BLEND_FONT) ?
+							font_BLEND_FONT : 0),
+					*x, top_y, 0, trfm, 2);
+			if (rufl_fm_error)
+				return rufl_FONT_MANAGER_ERROR;
+		} else {
+			callback(context, "Corpus.Medium\\ELatin1",
+					font_size / 2, missing, 0, 2,
+					*x, top_y);
+		}
 
 		/* last two characters underneath */
-		rufl_fm_error = xfont_paint(f, missing + 2, font_OS_UNITS |
-				(trfm ? font_GIVEN_TRFM : 0) |
-				font_GIVEN_LENGTH | font_GIVEN_FONT |
-				font_KERN |
-				((flags & rufl_BLEND_FONT) ?
-						font_BLEND_FONT : 0),
-				*x, y, 0, trfm, 2);
-		if (rufl_fm_error)
-			return rufl_FONT_MANAGER_ERROR;
+		if (action == rufl_PAINT) {
+			rufl_fm_error = xfont_paint(f, missing + 2,
+					font_OS_UNITS |
+					(trfm ? font_GIVEN_TRFM : 0) |
+					font_GIVEN_LENGTH | font_GIVEN_FONT |
+					font_KERN |
+					((flags & rufl_BLEND_FONT) ?
+							font_BLEND_FONT : 0),
+					*x, y, 0, trfm, 2);
+			if (rufl_fm_error)
+				return rufl_FONT_MANAGER_ERROR;
+		} else {
+			callback(context, "Corpus.Medium\\ELatin1",
+					font_size / 2, missing + 2, 0, 2,
+					*x, y);
+		}
 
 		*x += dx;
 	}
