@@ -15,6 +15,7 @@
 #include <strings.h>
 #include "oslib/font.h"
 #include "oslib/hourglass.h"
+#include "oslib/osfscontrol.h"
 #include "rufl_internal.h"
 
 
@@ -215,21 +216,10 @@ rufl_code rufl_init_font_list(void)
 		if (context2 == -1)
 			break;
 
-		/* (re)allocate buffers */
-		font_list = realloc(rufl_font_list, sizeof rufl_font_list[0] *
-				(rufl_font_list_entries + 1));
-		if (!font_list)
-			return rufl_OUT_OF_MEMORY;
-		rufl_font_list = font_list;
-
+		/* get next identifier */
 		identifier = malloc(size);
 		if (!identifier)
 			return rufl_OUT_OF_MEMORY;
-
-		rufl_font_list[rufl_font_list_entries].identifier = identifier;
-		rufl_font_list[rufl_font_list_entries].charset = 0;
-		rufl_font_list[rufl_font_list_entries].umap = 0;
-		rufl_font_list_entries++;
 
 		/* read identifier */
 		rufl_fm_error = xfont_list_fonts(identifier,
@@ -237,11 +227,75 @@ rufl_code rufl_init_font_list(void)
 				size, 0, 0, 0,
 				&context, 0, 0);
 		if (rufl_fm_error) {
+			free(identifier);
 			LOG("xfont_list_fonts: 0x%x: %s",
 					rufl_fm_error->errnum,
 					rufl_fm_error->errmess);
 			return rufl_FONT_MANAGER_ERROR;
 		}
+
+		/* Check that:
+		 * a) it's got some Outlines data
+		 * b) it's not a RiScript generated font
+		 * c) it's not a TeX font
+		 *
+		 * If it's any of the above, we ignore it.
+		 */
+		char pathname[size+6]; /* Fontname + ".Out*" + \0 */
+		snprintf(pathname, sizeof pathname, "%s.Out*", identifier);
+
+		/* Read required buffer size */
+		rufl_fm_error = xosfscontrol_canonicalise_path(pathname, 0,
+				"Font$Path", 0, 0, &size);
+		if (rufl_fm_error) {
+			free(identifier);
+			LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
+			return rufl_FONT_MANAGER_ERROR;
+		}
+
+		/* size is -(space required - 1) so negate and add 1 */
+		size = -size + 1;
+
+		/* Create buffer and canonicalise path */
+		char fullpath[size];
+		rufl_fm_error = xosfscontrol_canonicalise_path(pathname,
+				fullpath, "Font$Path", 0, size, 0);
+		if (rufl_fm_error) {
+			free(identifier);
+			LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
+					rufl_fm_error->errnum,
+					rufl_fm_error->errmess);
+			return rufl_FONT_MANAGER_ERROR;
+		}
+
+		/* LOG("%s (%c)", fullpath, fullpath[size - 2]); */
+
+		/* If the last character is an asterisk,
+		 * there's no Outlines file. */
+		if (fullpath[size - 2] == '*' ||
+				strstr(fullpath, "!RiScript") ||
+				strstr(fullpath, "!TeXFonts")) {
+			/* Ignore this font */
+			free(identifier);
+			continue;
+		}
+
+		/* (re)allocate buffers */
+		font_list = realloc(rufl_font_list, sizeof rufl_font_list[0] *
+				(rufl_font_list_entries + 1));
+		if (!font_list) {
+			free(identifier);
+			return rufl_OUT_OF_MEMORY;
+		}
+		rufl_font_list = font_list;
+
+		rufl_font_list[rufl_font_list_entries].identifier = identifier;
+		rufl_font_list[rufl_font_list_entries].charset = 0;
+		rufl_font_list[rufl_font_list_entries].umap = 0;
+		rufl_font_list_entries++;
+
 		/*LOG("%u \"%s\"", rufl_font_list_entries - 1, identifier);*/
 
 		/* add family to list, if it is new */
