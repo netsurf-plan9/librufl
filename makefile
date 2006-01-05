@@ -16,19 +16,27 @@ SOURCE = rufl_init.c rufl_quit.c rufl_dump_state.c \
 
 
 ifeq ($(COMPILER), gcc)
-# cross-compiling using gccsdk
-CC = /home/riscos/cross/bin/gcc
+# cross-compiling using GCCSDK
+GCCSDK_INSTALL_CROSSBIN ?= /home/riscos/cross/bin
+GCCSDK_INSTALL_ENV ?= /home/riscos/env
+
+CC = $(GCCSDK_INSTALL_CROSSBIN)/gcc
 CFLAGS = -std=c99 -O3 -W -Wall -Wundef -Wpointer-arith -Wcast-qual \
 	-Wcast-align -Wwrite-strings -Wstrict-prototypes \
 	-Wmissing-prototypes -Wmissing-declarations \
 	-Wnested-externs -Winline -Wno-unused-parameter \
-	-mpoke-function-name -I/home/riscos/env/include
-LIBS = -L/home/riscos/env/lib -loslib
+	-mpoke-function-name -I$(GCCSDK_INSTALL_ENV)/include
+LIBS = -L$(GCCSDK_INSTALL_ENV)/lib -lOSLib32
+INSTALL = $(GCCSDK_INSTALL_ENV)/ro-install
 
 all: rufl.o rufl_test,ff8 rufl_chars,ff8
+
 rufl.o: $(SOURCE) rufl.h rufl_internal.h Glyphs
 	$(CC) $(CFLAGS) -c -o $@ $(SOURCE)
 
+install: rufl.o
+	$(INSTALL) rufl.o $(GCCSDK_INSTALL_ENV)/lib/librufl.o
+	$(INSTALL) rufl.h $(GCCSDK_INSTALL_ENV)/include/rufl.h
 else
 # compiling on RISC OS using Norcroft
 CC = cc
