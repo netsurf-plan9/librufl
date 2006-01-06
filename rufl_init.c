@@ -275,7 +275,7 @@ rufl_code rufl_init_font_list(void)
 		/* If the last character is an asterisk,
 		 * there's no Outlines file. */
 		if (fullpath[size - 2] == '*' ||
-				strstr(fullpath, "!RiScript") ||
+				strstr(fullpath, "RiScript") ||
 				strstr(fullpath, "!TeXFonts")) {
 			/* Ignore this font */
 			free(identifier);
