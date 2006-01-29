@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 #ifndef RUFL_H
@@ -29,15 +29,22 @@ typedef enum {
 	rufl_IO_EOF,
 } rufl_code;
 
-
+/** Font weight and slant. Normal weight is 400, 700 gives the "Bold" weight of
+ * fonts. */
 typedef enum {
-	rufl_REGULAR = 0,
-	rufl_SLANTED = 1,
-	rufl_BOLD = 2,
-	rufl_BOLD_SLANTED = 3,
+	rufl_WEIGHT_100 = 1,
+	rufl_WEIGHT_200 = 2,
+	rufl_WEIGHT_300 = 3,
+	rufl_WEIGHT_400 = 4,
+	rufl_WEIGHT_500 = 5,
+	rufl_WEIGHT_600 = 6,
+	rufl_WEIGHT_700 = 7,
+	rufl_WEIGHT_800 = 8,
+	rufl_WEIGHT_900 = 9,
+	rufl_SLANTED = 0x100,
 } rufl_style;
 
-/** rufl_paint(_transformed) flags */
+/** rufl_paint flags */
 #define rufl_BLEND_FONT 0x01
 
 /** Last Font Manager error. */
@@ -66,19 +73,6 @@ rufl_code rufl_paint(const char *font_family, rufl_style font_style,
 		unsigned int font_size,
 		const char *string, size_t length,
 		int x, int y, unsigned int flags);
-
-
-/**
- * Render Unicode text with a transformation matrix.
- *
- * Only transformations which keep the x-axis direction unchanged are
- * supported.
- */
-
-rufl_code rufl_paint_transformed(const char *font_family, rufl_style font_style,
-		unsigned int font_size,
-		const char *string, size_t length,
-		int x, int y, os_trfm *trfm, unsigned int flags);
 
 
 /**

@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 #define _GNU_SOURCE  /* for strndup */
@@ -23,7 +23,7 @@ struct rufl_font_list_entry *rufl_font_list = 0;
 unsigned int rufl_font_list_entries = 0;
 char **rufl_family_list = 0;
 unsigned int rufl_family_list_entries = 0;
-unsigned int *rufl_family_map = 0;
+struct rufl_family_map_entry *rufl_family_map = 0;
 os_error *rufl_fm_error = 0;
 unsigned short *rufl_substitution_table;
 struct rufl_cache_entry rufl_cache[rufl_CACHE_SIZE];
@@ -31,31 +31,41 @@ int rufl_cache_time = 0;
 bool rufl_old_font_manager = false;
 
 
-/** An entry in rufl_style_table. */
-struct rufl_style_table_entry {
+/** An entry in rufl_weight_table. */
+struct rufl_weight_table_entry {
 	const char *name;
-	unsigned int style;
+	unsigned int weight;
 };
 
-/** Map from font name tail to font style. Must be sorted by name. */
-const struct rufl_style_table_entry rufl_style_table[] = {
-	{ "Bold", rufl_BOLD },
-	{ "Bold.Italic", rufl_BOLD_SLANTED },
-	{ "Bold.Oblique", rufl_BOLD_SLANTED },
-	{ "Italic", rufl_SLANTED },
-	{ "Medium", rufl_REGULAR },
-	{ "Medium.Italic", rufl_SLANTED },
-	{ "Medium.Oblique", rufl_SLANTED },
-	{ "Oblique", rufl_SLANTED },
-	{ "Regular", rufl_REGULAR },
-	{ "Regular.Italic", rufl_SLANTED },
-	{ "Regular.Oblique", rufl_SLANTED },
+/** Map from font name part to font weight. Must be case-insensitive sorted by
+ * name. */
+const struct rufl_weight_table_entry rufl_weight_table[] = {
+	{ "Black", 9 },
+	{ "Bold", 7 },
+	{ "Book", 3 },
+	{ "Demi", 6 },
+	{ "DemiBold", 6 },
+	{ "Extra", 8 },
+	{ "ExtraBlack", 9 },
+	{ "ExtraBold", 8 },
+	{ "ExtraLight", 1 },
+	{ "Heavy", 8 },
+	{ "Light", 2 },
+	{ "Medium", 5 },
+	{ "Regular", 4 },
+	{ "Semi", 6 },
+	{ "SemiBold", 6 },
+	{ "SemiLight", 3 },
+	{ "UltraBlack", 9 },
+	{ "UltraBold", 9 },
 };
 
 
 static rufl_code rufl_init_font_list(void);
-static int rufl_style_table_cmp(const void *keyval, const void *datum);
+static rufl_code rufl_init_add_font(char *identifier);
+static int rufl_weight_table_cmp(const void *keyval, const void *datum);
 static rufl_code rufl_init_scan_font(unsigned int font);
+static bool rufl_is_space(unsigned int u);
 static rufl_code rufl_init_scan_font_old(unsigned int font_index);
 static rufl_code rufl_init_read_encoding(font_f font,
 		struct rufl_unicode_map *umap);
@@ -189,137 +199,133 @@ rufl_code rufl_init(void)
 
 rufl_code rufl_init_font_list(void)
 {
-	int size;
-	struct rufl_font_list_entry *font_list;
-	char *identifier;
-	char *dot;
-	char **family_list;
-	char *family;
-	unsigned int *family_map;
-	unsigned int i;
+	rufl_code code;
 	font_list_context context = 0;
-	font_list_context context2;
-	struct rufl_style_table_entry *entry;
+	char identifier[80];
 
 	while (context != -1) {
-		/* find length of next identifier */
-		rufl_fm_error = xfont_list_fonts(0,
-				font_RETURN_FONT_NAME | context,
-				0, 0, 0, 0,
-				&context2, &size, 0);
-		if (rufl_fm_error) {
-			LOG("xfont_list_fonts: 0x%x: %s",
-					rufl_fm_error->errnum,
-					rufl_fm_error->errmess);
-			return rufl_FONT_MANAGER_ERROR;
-		}
-		if (context2 == -1)
-			break;
-
-		/* get next identifier */
-		identifier = malloc(size);
-		if (!identifier)
-			return rufl_OUT_OF_MEMORY;
-
 		/* read identifier */
 		rufl_fm_error = xfont_list_fonts(identifier,
 				font_RETURN_FONT_NAME | context,
-				size, 0, 0, 0,
+				sizeof identifier, 0, 0, 0,
 				&context, 0, 0);
 		if (rufl_fm_error) {
-			free(identifier);
 			LOG("xfont_list_fonts: 0x%x: %s",
 					rufl_fm_error->errnum,
 					rufl_fm_error->errmess);
 			return rufl_FONT_MANAGER_ERROR;
 		}
+		if (context == -1)
+			break;
 
-		/* Check that:
-		 * a) it's got some Outlines data
-		 * b) it's not a RiScript generated font
-		 * c) it's not a TeX font
-		 *
-		 * If it's any of the above, we ignore it.
-		 */
-		char pathname[size+6]; /* Fontname + ".Out*" + \0 */
-		snprintf(pathname, sizeof pathname, "%s.Out*", identifier);
+		code = rufl_init_add_font(identifier);
+		if (code != rufl_OK)
+			return code;
+	}
 
-		/* Read required buffer size */
-		rufl_fm_error = xosfscontrol_canonicalise_path(pathname, 0,
-				"Font$Path", 0, 0, &size);
-		if (rufl_fm_error) {
-			free(identifier);
-			LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
-					rufl_fm_error->errnum,
-					rufl_fm_error->errmess);
-			return rufl_FONT_MANAGER_ERROR;
-		}
+	return rufl_OK;
+}
 
-		/* size is -(space required - 1) so negate and add 1 */
-		size = -size + 1;
 
-		/* Create buffer and canonicalise path */
-		char fullpath[size];
-		rufl_fm_error = xosfscontrol_canonicalise_path(pathname,
-				fullpath, "Font$Path", 0, size, 0);
-		if (rufl_fm_error) {
-			free(identifier);
-			LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
-					rufl_fm_error->errnum,
-					rufl_fm_error->errmess);
-			return rufl_FONT_MANAGER_ERROR;
-		}
+rufl_code rufl_init_add_font(char *identifier)
+{
+	char pathname[100];
+	size_t size;
+	struct rufl_font_list_entry *font_list;
+	char *dot;
+	char **family_list;
+	char *family, *part;
+	unsigned int weight = 0;
+	unsigned int slant = 0;
+	bool special = false;
+	struct rufl_family_map_entry *family_map;
+	unsigned int i;
+	struct rufl_weight_table_entry *entry;
 
-		/* LOG("%s (%c)", fullpath, fullpath[size - 2]); */
+	/* Check that:
+	 * a) it's got some Outlines data
+	 * b) it's not a RiScript generated font
+	 * c) it's not a TeX font	 */
+	snprintf(pathname, sizeof pathname, "%s.Out*", identifier);
 
-		/* If the last character is an asterisk,
-		 * there's no Outlines file. */
-		if (fullpath[size - 2] == '*' ||
-				strstr(fullpath, "RiScript") ||
-				strstr(fullpath, "!TeXFonts")) {
-			/* Ignore this font */
-			free(identifier);
+	/* Read required buffer size */
+	rufl_fm_error = xosfscontrol_canonicalise_path(pathname, 0,
+			"Font$Path", 0, 0, &size);
+	if (rufl_fm_error) {
+		LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
+				rufl_fm_error->errnum,
+				rufl_fm_error->errmess);
+		return rufl_FONT_MANAGER_ERROR;
+	}
+
+	/* size is -(space required - 1) so negate and add 1 */
+	size = -size + 1;
+
+	/* Create buffer and canonicalise path */
+	char fullpath[size];
+	rufl_fm_error = xosfscontrol_canonicalise_path(pathname,
+			fullpath, "Font$Path", 0, size, 0);
+	if (rufl_fm_error) {
+		LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
+				rufl_fm_error->errnum,
+				rufl_fm_error->errmess);
+		return rufl_FONT_MANAGER_ERROR;
+	}
+
+	/* LOG("%s (%c)", fullpath, fullpath[size - 2]); */
+
+	/* If the last character is an asterisk, there's no Outlines file. */
+	if (fullpath[size - 2] == '*' ||
+			strstr(fullpath, "RiScript") ||
+			strstr(fullpath, "!TeXFonts"))
+		/* Ignore this font */
+		return rufl_OK;
+
+	/* add identifier to rufl_font_list */
+	font_list = realloc(rufl_font_list, sizeof rufl_font_list[0] *
+			(rufl_font_list_entries + 1));
+	if (!font_list)
+		return rufl_OUT_OF_MEMORY;
+	rufl_font_list = font_list;
+	rufl_font_list[rufl_font_list_entries].identifier = strdup(identifier);
+	if (!rufl_font_list[rufl_font_list_entries].identifier)
+		return rufl_OUT_OF_MEMORY;
+	rufl_font_list[rufl_font_list_entries].charset = 0;
+	rufl_font_list[rufl_font_list_entries].umap = 0;
+	rufl_font_list_entries++;
+
+	/* determine family, weight, and slant */
+	dot = strchr(identifier, '.');
+	family = identifier;
+	if (dot)
+		*dot = 0;
+	while (dot && (!weight || !slant)) {
+		part = dot + 1;
+		dot = strchr(part, '.');
+		if (dot)
+			*dot = 0;
+		if (strcasecmp(part, "Italic") == 0 ||
+				strcasecmp(part, "Oblique") == 0) {
+			slant = 1;
 			continue;
 		}
+		entry = bsearch(part, rufl_weight_table,
+				sizeof rufl_weight_table /
+				sizeof rufl_weight_table[0],
+				sizeof rufl_weight_table[0],
+				rufl_weight_table_cmp);
+		if (entry)
+			weight = entry->weight;
+		else
+			special = true;  /* unknown weight or style */
+	}
+	if (!weight)
+		weight = 4;
+	weight--;
 
-		/* (re)allocate buffers */
-		font_list = realloc(rufl_font_list, sizeof rufl_font_list[0] *
-				(rufl_font_list_entries + 1));
-		if (!font_list) {
-			free(identifier);
-			return rufl_OUT_OF_MEMORY;
-		}
-		rufl_font_list = font_list;
-
-		rufl_font_list[rufl_font_list_entries].identifier = identifier;
-		rufl_font_list[rufl_font_list_entries].charset = 0;
-		rufl_font_list[rufl_font_list_entries].umap = 0;
-		rufl_font_list_entries++;
-
-		/*LOG("%u \"%s\"", rufl_font_list_entries - 1, identifier);*/
-
-		/* add family to list, if it is new */
-		dot = strchr(identifier, '.');
-		if (2 <= rufl_font_list_entries && dot &&
-				strncmp(identifier, rufl_font_list
-				[rufl_font_list_entries - 2].identifier,
-				dot - identifier) == 0) {
-			/* same family as last font */
-			entry = bsearch(dot + 1, rufl_style_table,
-					sizeof rufl_style_table /
-					sizeof rufl_style_table[0],
-					sizeof rufl_style_table[0],
-					rufl_style_table_cmp);
-			if (entry)
-				rufl_family_map[rufl_STYLES *
-						(rufl_family_list_entries - 1) +
-						entry->style] =
-						rufl_font_list_entries - 1;
-			continue;
-		}
-
+	if (rufl_family_list_entries == 0 || strcasecmp(family,
+			rufl_family_list[rufl_family_list_entries - 1]) != 0) {
 		/* new family */
-		/*LOG("new family %u", rufl_family_list_entries);*/
 		family_list = realloc(rufl_family_list,
 				sizeof rufl_family_list[0] *
 				(rufl_family_list_entries + 1));
@@ -328,35 +334,45 @@ rufl_code rufl_init_font_list(void)
 		rufl_family_list = family_list;
 
 		family_map = realloc(rufl_family_map,
-				rufl_STYLES * sizeof rufl_family_map[0] *
+				sizeof rufl_family_map[0] *
 				(rufl_family_list_entries + 1));
 		if (!family_map)
 			return rufl_OUT_OF_MEMORY;
 		rufl_family_map = family_map;
 
-		if (dot)
-			family = strndup(identifier, dot - identifier);
-		else
-			family = strdup(identifier);
+		family = strdup(family);
 		if (!family)
 			return rufl_OUT_OF_MEMORY;
 
 		rufl_family_list[rufl_family_list_entries] = family;
-		for (i = 0; i != rufl_STYLES; i++)
-			rufl_family_map[rufl_STYLES * rufl_family_list_entries +
-					i] = rufl_font_list_entries - 1;
+		for (i = 0; i != 9; i++)
+			rufl_family_map[rufl_family_list_entries].font[i][0] =
+			rufl_family_map[rufl_family_list_entries].font[i][1] =
+					NO_FONT;
 		rufl_family_list_entries++;
 	}
+
+	struct rufl_family_map_entry *e =
+			&rufl_family_map[rufl_family_list_entries - 1];
+	/* prefer fonts with no unknown weight or style in their name, so that,
+	 * for example, Alps.Light takes priority over Alps.Cond.Light */
+	if (e->font[weight][slant] == NO_FONT || !special)
+		e->font[weight][slant] = rufl_font_list_entries - 1;
+
+	rufl_font_list[rufl_font_list_entries - 1].family =
+			rufl_family_list_entries - 1;
+	rufl_font_list[rufl_font_list_entries - 1].weight = weight;
+	rufl_font_list[rufl_font_list_entries - 1].slant = slant;
 
 	return rufl_OK;
 }
 
 
-int rufl_style_table_cmp(const void *keyval, const void *datum)
+int rufl_weight_table_cmp(const void *keyval, const void *datum)
 {
 	const char *key = keyval;
-	const struct rufl_style_table_entry *entry = datum;
-	return strcmp(key, entry->name);
+	const struct rufl_weight_table_entry *entry = datum;
+	return strcasecmp(key, entry->name);
 }
 
 
@@ -397,7 +413,13 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 	}
 
 	/* scan through all characters */
-	for (u = 32; u != 0x10000; u++) {
+	for (u = 0x0020; u != 0x10000; u++) {
+		if (u == 0x007f) {
+			/* skip DELETE and C1 controls */
+			u = 0x009f;
+			continue;
+		}
+
 		string[0] = u;
 		rufl_fm_error = xfont_scan_string(font, (char *) string,
 				font_RETURN_BBOX | font_GIVEN32_BIT |
@@ -409,11 +431,17 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 		if (rufl_fm_error)
 			break;
 
-		if (block.bbox.x0 == 0x20000000 ||
-				(x_out == 0 && y_out == 0 &&
+		if (block.bbox.x0 == 0x20000000) {
+			/* absent (no definition) */
+		} else if (x_out == 0 && y_out == 0 &&
 				block.bbox.x0 == 0 && block.bbox.y0 == 0 &&
-				block.bbox.x1 == 0 && block.bbox.y1 == 0)) {
-			/* absent */
+				block.bbox.x1 == 0 && block.bbox.y1 == 0) {
+			/* absent (empty) */
+                } else if (block.bbox.x0 == 0 && block.bbox.y0 == 0 &&
+				block.bbox.x1 == 0 && block.bbox.y1 == 0 &&
+				!rufl_is_space(u)) {
+			/* absent (space but not a space character - some
+			 * fonts do this) */
 		} else {
 			/* present */
 			byte = (u >> 3) & 31;
@@ -463,6 +491,18 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 	rufl_font_list[font_index].charset = charset;
 
 	return rufl_OK;
+}
+
+
+/**
+ * A character is one of the Unicode space characters.
+ */
+
+bool rufl_is_space(unsigned int u)
+{
+	return u == 0x0020 || u == 0x00a0 ||
+			(0x2000 <= u && u <= 0x200b) ||
+			u == 0x202f || u == 0x3000;
 }
 
 
@@ -528,11 +568,17 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 		if (rufl_fm_error)
 			break;
 
-		if (block.bbox.x0 == 0x20000000 ||
-				(x_out == 0 && y_out == 0 &&
+		if (block.bbox.x0 == 0x20000000) {
+			/* absent (no definition) */
+		} else if (x_out == 0 && y_out == 0 &&
 				block.bbox.x0 == 0 && block.bbox.y0 == 0 &&
-				block.bbox.x1 == 0 && block.bbox.y1 == 0)) {
-			/* absent */
+				block.bbox.x1 == 0 && block.bbox.y1 == 0) {
+			/* absent (empty) */
+                } else if (block.bbox.x0 == 0 && block.bbox.y0 == 0 &&
+				block.bbox.x1 == 0 && block.bbox.y1 == 0 &&
+				!rufl_is_space(u)) {
+			/* absent (space but not a space character - some
+			 * fonts do this) */
 		} else {
 			/* present */
 			if (charset->index[u >> 8] == BLOCK_EMPTY) {

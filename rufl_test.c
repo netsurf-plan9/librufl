@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 #include <errno.h>
@@ -29,28 +29,28 @@ int main(void)
 
 	try(rufl_init(), "rufl_init");
 	rufl_dump_state();
-	try(rufl_paint("NewHall", rufl_REGULAR, 240,
+	try(rufl_paint("NewHall", rufl_WEIGHT_400, 240,
 			utf8_test, sizeof utf8_test - 1,
 			1200, 1000, 0), "rufl_paint");
-	try(rufl_width("NewHall", rufl_REGULAR, 240,
+	try(rufl_width("NewHall", rufl_WEIGHT_400, 240,
 			utf8_test, sizeof utf8_test - 1,
 			&width), "rufl_width");
 	printf("width: %i\n", width);
 	for (x = 0; x < width + 100; x += 100) {
-		try(rufl_x_to_offset("NewHall", rufl_REGULAR, 240,
+		try(rufl_x_to_offset("NewHall", rufl_WEIGHT_400, 240,
 				utf8_test, sizeof utf8_test - 1,
 				x, &char_offset, &actual_x),
 				"rufl_x_to_offset");
 		printf("x to offset: %i -> %i %i \"%s\"\n", x, actual_x,
 				char_offset, utf8_test + char_offset);
-		try(rufl_split("NewHall", rufl_REGULAR, 240,
+		try(rufl_split("NewHall", rufl_WEIGHT_400, 240,
 				utf8_test, sizeof utf8_test - 1,
 				x, &char_offset, &actual_x),
 				"rufl_split");
 		printf("split: %i -> %i %i \"%s\"\n", x, actual_x,
 				char_offset, utf8_test + char_offset);
 	}
-	try(rufl_paint_callback("NewHall", rufl_REGULAR, 240,
+	try(rufl_paint_callback("NewHall", rufl_WEIGHT_400, 240,
 			utf8_test, sizeof utf8_test - 1,
 			1200, 1000, callback, 0), "rufl_paint_callback");
 	rufl_quit();

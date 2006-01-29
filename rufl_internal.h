@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 #include <limits.h>
@@ -66,6 +66,13 @@ struct rufl_font_list_entry {
 	struct rufl_character_set *charset;
 	/** Mapping from Unicode to character code. */
 	struct rufl_unicode_map *umap;
+	/** Family that this font belongs to (index in rufl_family_list and
+	 * rufl_family_map). */
+	unsigned int family;
+	/** Font weight (0 to 8). */
+	unsigned int weight;
+	/** Font slant (0 or 1). */
+	unsigned int slant;
 };
 /** List of all available fonts. */
 extern struct rufl_font_list_entry *rufl_font_list;
@@ -73,10 +80,15 @@ extern struct rufl_font_list_entry *rufl_font_list;
 extern unsigned int rufl_font_list_entries;
 
 
-#define rufl_STYLES 4
-
-/** Map from font family to fonts. rufl_STYLES entries per family. */
-extern unsigned int *rufl_family_map;
+/** An entry in rufl_family_map. */
+struct rufl_family_map_entry {
+	/** This style does not exist in this family. */
+#	define NO_FONT UINT_MAX
+	/** Map from weight and slant to index in rufl_font_list, or NO_FONT. */
+	unsigned int font[9][2];
+};
+/** Map from font family to fonts, rufl_family_list_entries entries. */
+extern struct rufl_family_map_entry *rufl_family_map;
 
 
 /** No font contains this character. */

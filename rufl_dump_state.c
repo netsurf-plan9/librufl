@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 #include <stdio.h>
@@ -42,10 +42,21 @@ void rufl_dump_state(void)
 	printf("rufl_family_list:\n");
 	for (i = 0; i != rufl_family_list_entries; i++) {
 		printf("  %u \"%s\"\n", i, rufl_family_list[i]);
-		for (j = 0; j != rufl_STYLES; j++)
-			printf("    %u \"%s\"\n", j, rufl_font_list
-					[rufl_family_map[rufl_STYLES * i + j]]
-					.identifier);
+		for (j = 0; j != 9; j++) {
+			struct rufl_family_map_entry *e = &rufl_family_map[i];
+			printf("    %u ", j);
+			if (e->font[j][0] == NO_FONT)
+				printf("- ");
+			else
+				printf("\"%s\" ", rufl_font_list[e->font[j][0]].
+						identifier);
+			if (e->font[j][1] == NO_FONT)
+				printf("- ");
+			else
+				printf("\"%s\" ", rufl_font_list[e->font[j][1]].
+						identifier);
+			printf("\n");
+		}
 	}
 
 	printf("rufl_substitution_table:\n");

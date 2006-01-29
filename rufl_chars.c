@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 #include <errno.h>
@@ -16,7 +16,7 @@
 
 
 unsigned int font = 0;
-bool bold = false;
+unsigned int weight = rufl_WEIGHT_400;
 bool italic = false;
 
 
@@ -73,7 +73,7 @@ int main(void)
 
 	try(rufl_init(), "rufl_init");
 
-	menu = malloc(wimp_SIZEOF_MENU(2 + rufl_family_list_entries));
+	menu = malloc(wimp_SIZEOF_MENU(10 + rufl_family_list_entries));
 	if (!menu)
 		die("Out of memory");
 	strcpy(menu->title_data.text, "Fonts");
@@ -84,34 +84,38 @@ int main(void)
 	menu->width = 200;
 	menu->height = wimp_MENU_ITEM_HEIGHT;
 	menu->gap = wimp_MENU_ITEM_GAP;
-	menu->entries[0].menu_flags = 0;
-	menu->entries[0].sub_menu = wimp_NO_SUB_MENU;
-	menu->entries[0].icon_flags = wimp_ICON_TEXT |
+	for (i = 0; i != 10; i++) {
+		menu->entries[i].menu_flags = 0;
+		menu->entries[i].sub_menu = wimp_NO_SUB_MENU;
+		menu->entries[i].icon_flags = wimp_ICON_TEXT |
+			      (wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT) |
+			      (wimp_COLOUR_WHITE << wimp_ICON_BG_COLOUR_SHIFT);
+		strcpy(menu->entries[i].data.text, "100");
+		menu->entries[i].data.text[0] = '1' + i;
+	}
+	menu->entries[9].menu_flags = wimp_MENU_SEPARATE;
+	menu->entries[9].sub_menu = wimp_NO_SUB_MENU;
+	menu->entries[9].icon_flags = wimp_ICON_TEXT |
 			(wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT) |
 			(wimp_COLOUR_WHITE << wimp_ICON_BG_COLOUR_SHIFT);
-	strcpy(menu->entries[0].data.text, "Bold");
-	menu->entries[1].menu_flags = wimp_MENU_SEPARATE;
-	menu->entries[1].sub_menu = wimp_NO_SUB_MENU;
-	menu->entries[1].icon_flags = wimp_ICON_TEXT |
-			(wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT) |
-			(wimp_COLOUR_WHITE << wimp_ICON_BG_COLOUR_SHIFT);
-	strcpy(menu->entries[1].data.text, "Italic");
+	strcpy(menu->entries[9].data.text, "Italic");
 	for (i = 0; i != rufl_family_list_entries; i++) {
-		menu->entries[2 + i].menu_flags = 0;
-		menu->entries[2 + i].sub_menu = wimp_NO_SUB_MENU;
-		menu->entries[2 + i].icon_flags = wimp_ICON_TEXT |
+		menu->entries[10 + i].menu_flags = 0;
+		menu->entries[10 + i].sub_menu = wimp_NO_SUB_MENU;
+		menu->entries[10 + i].icon_flags = wimp_ICON_TEXT |
 				wimp_ICON_INDIRECTED |
 			(wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT) |
 			(wimp_COLOUR_WHITE << wimp_ICON_BG_COLOUR_SHIFT);
-		menu->entries[2 + i].data.indirected_text.text =
+		menu->entries[10 + i].data.indirected_text.text =
 				rufl_family_list[i];
-		menu->entries[2 + i].data.indirected_text.validation =
+		menu->entries[10 + i].data.indirected_text.validation =
 				(char *) -1;
-		menu->entries[2 + i].data.indirected_text.size =
+		menu->entries[10 + i].data.indirected_text.size =
 				strlen(rufl_family_list[i]);
 	}
-	menu->entries[2].menu_flags |= wimp_MENU_TICKED;
-	menu->entries[i + 1].menu_flags |= wimp_MENU_LAST;
+	menu->entries[3].menu_flags |= wimp_MENU_TICKED;
+	menu->entries[10].menu_flags |= wimp_MENU_TICKED;
+	menu->entries[i + 9].menu_flags |= wimp_MENU_LAST;
 
 	error = xwimp_create_window((wimp_window *) &window, &w);
 	if (error)
@@ -181,17 +185,20 @@ int main(void)
 			error = xwimp_get_pointer_info(&pointer);
 			if (error)
 				die(error->errmess);
-			if (block.selection.items[0] == 0) {
-				bold = !bold;
-				menu->entries[0].menu_flags ^= wimp_MENU_TICKED;
-			} else if (block.selection.items[0] == 1) {
-				italic = !italic;
-				menu->entries[1].menu_flags ^= wimp_MENU_TICKED;
-			} else {
-				menu->entries[2 + font].menu_flags ^=
+			if (block.selection.items[0] <= 8) {
+				menu->entries[weight - 1].menu_flags ^=
 						wimp_MENU_TICKED;
-				font = block.selection.items[0] - 2;
-				menu->entries[2 + font].menu_flags ^=
+				weight = block.selection.items[0] + 1;
+				menu->entries[weight - 1].menu_flags ^=
+						wimp_MENU_TICKED;
+			} else if (block.selection.items[0] == 9) {
+				italic = !italic;
+				menu->entries[9].menu_flags ^= wimp_MENU_TICKED;
+			} else {
+				menu->entries[10 + font].menu_flags ^=
+						wimp_MENU_TICKED;
+				font = block.selection.items[0] - 10;
+				menu->entries[10 + font].menu_flags ^=
 						wimp_MENU_TICKED;
 			}
 			error = xwimp_force_redraw(w,
@@ -239,10 +246,7 @@ rufl_code redraw(int x, int y, int y0, int y1)
 	unsigned int l;
 	unsigned int u;
 	rufl_code code;
-	rufl_style style = bold && italic ? rufl_BOLD_SLANTED :
-			bold ? rufl_BOLD :
-			italic ? rufl_SLANTED :
-			rufl_REGULAR;
+	rufl_style style = weight | (italic ? rufl_SLANTED : 0);
 
 	for (u = y0 / 40 * 32; (int) u != (y1 / 40 + 1) * 32; u++) {
 		if (u <= 0x7f)
