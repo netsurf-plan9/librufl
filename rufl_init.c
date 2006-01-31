@@ -299,7 +299,7 @@ rufl_code rufl_init_add_font(char *identifier)
 	family = identifier;
 	if (dot)
 		*dot = 0;
-	while (dot && (!weight || !slant)) {
+	while (dot) {
 		part = dot + 1;
 		dot = strchr(part, '.');
 		if (dot)

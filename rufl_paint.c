@@ -204,7 +204,7 @@ rufl_code rufl_process(rufl_action action,
 	struct rufl_family_map_entry *e =
 			&rufl_family_map[family - rufl_family_list];
 	used_weight = weight;
-	if (weight <= 4)
+	if (weight <= 2)
 		search_direction = -1;
 	else
 		search_direction = +1;
