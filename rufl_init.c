@@ -13,9 +13,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
-#include "oslib/font.h"
-#include "oslib/hourglass.h"
-#include "oslib/osfscontrol.h"
+#include <oslib/font.h>
+#include <oslib/hourglass.h>
+#include <oslib/os.h>
+#include <oslib/osfscontrol.h>
+#include <oslib/taskwindow.h>
+#include <oslib/wimp.h>
+#include <oslib/wimpreadsysinfo.h>
 #include "rufl_internal.h"
 
 
@@ -29,6 +33,8 @@ unsigned short *rufl_substitution_table;
 struct rufl_cache_entry rufl_cache[rufl_CACHE_SIZE];
 int rufl_cache_time = 0;
 bool rufl_old_font_manager = false;
+wimp_w rufl_status_w = 0;
+char rufl_status_buffer[80];
 
 
 /** An entry in rufl_weight_table. */
@@ -75,6 +81,9 @@ static rufl_code rufl_init_substitution_table(void);
 static rufl_code rufl_save_cache(void);
 static rufl_code rufl_load_cache(void);
 static int rufl_font_list_cmp(const void *keyval, const void *datum);
+static void rufl_init_status_open(void);
+static void rufl_init_status(const char *status, float progress);
+static void rufl_init_status_close(void);
 
 
 /**
@@ -97,6 +106,8 @@ rufl_code rufl_init(void)
 		return rufl_OK;
 
 	xhourglass_on();
+
+	rufl_init_status_open();
 
 	/* determine if the font manager support Unicode */
 	rufl_fm_error = xfont_find_font("Homerton.Medium\\EUTF8", 160, 160,
@@ -147,6 +158,8 @@ rufl_code rufl_init(void)
 		}
 		LOG("scanning %u \"%s\"", i, rufl_font_list[i].identifier);
 		xhourglass_percentage(100 * i / rufl_font_list_entries);
+		rufl_init_status(rufl_font_list[i].identifier,
+				(float) i / rufl_font_list_entries);
 		if (rufl_old_font_manager)
 			code = rufl_init_scan_font_old(i);
 		else
@@ -185,6 +198,8 @@ rufl_code rufl_init(void)
 
 	for (i = 0; i != rufl_CACHE_SIZE; i++)
 		rufl_cache[i].font = rufl_CACHE_NONE;
+
+	rufl_init_status_close();
 
 	xhourglass_off();
 
@@ -419,6 +434,9 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 			u = 0x009f;
 			continue;
 		}
+
+		if (u % 0x200 == 0)
+			rufl_init_status(0, 0);
 
 		string[0] = u;
 		rufl_fm_error = xfont_scan_string(font, (char *) string,
@@ -1024,4 +1042,139 @@ int rufl_font_list_cmp(const void *keyval, const void *datum)
 	const char *key = keyval;
 	const struct rufl_font_list_entry *entry = datum;
 	return strcasecmp(key, entry->identifier);
+}
+
+
+/**
+ * Create and open the init status window.
+ */
+
+void rufl_init_status_open(void)
+{
+	int xeig_factor, yeig_factor, xwind_limit, ywind_limit, width, height;
+	wimp_t task;
+	osbool window_task;
+	wimp_WINDOW(4) window = { { 0, 0, 0, 0 }, 0, 0, wimp_TOP,
+			wimp_WINDOW_AUTO_REDRAW | wimp_WINDOW_NEW_FORMAT,
+			wimp_COLOUR_BLACK, wimp_COLOUR_LIGHT_GREY,
+			wimp_COLOUR_BLACK, wimp_COLOUR_VERY_LIGHT_GREY,
+			wimp_COLOUR_DARK_GREY, wimp_COLOUR_LIGHT_GREY,
+			wimp_COLOUR_CREAM, 0,
+			{ 0, -128, 800, 0 }, 0, 0, 0, 0, 0, { "" }, 4,
+			{ { { 12, -56, 788, -12 }, wimp_ICON_TEXT |
+			wimp_ICON_HCENTRED | wimp_ICON_VCENTRED |
+			wimp_ICON_INDIRECTED |
+			wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT |
+			wimp_COLOUR_VERY_LIGHT_GREY <<wimp_ICON_BG_COLOUR_SHIFT,
+			{ "" } },
+			{ { 12, -116, 788, -64 }, wimp_ICON_TEXT |
+			wimp_ICON_FILLED | wimp_ICON_BORDER |
+			wimp_ICON_INDIRECTED |
+			wimp_COLOUR_VERY_LIGHT_GREY <<wimp_ICON_BG_COLOUR_SHIFT,
+			{ "" } },
+			{ { 16, -112, 16, -68 }, wimp_ICON_FILLED |
+			wimp_COLOUR_ORANGE << wimp_ICON_BG_COLOUR_SHIFT,
+			{ "" } },
+			{ { 16, -112, 784, -68 }, wimp_ICON_TEXT |
+			wimp_ICON_HCENTRED | wimp_ICON_VCENTRED |
+			wimp_ICON_INDIRECTED |
+			wimp_COLOUR_BLACK << wimp_ICON_FG_COLOUR_SHIFT |
+			wimp_COLOUR_MID_LIGHT_GREY << wimp_ICON_BG_COLOUR_SHIFT,
+			{ "" } } },
+			};
+	wimp_window_state state;
+	os_error *error;
+
+	window.icons[0].data.indirected_text.text =
+			"Scanning fonts - please wait";
+	window.icons[0].data.indirected_text.validation = "";
+	window.icons[1].data.indirected_text.text = "";
+	window.icons[1].data.indirected_text.validation = "r2";
+	window.icons[3].data.indirected_text.text = rufl_status_buffer;
+	window.icons[3].data.indirected_text.validation = "";
+
+	xos_read_mode_variable(os_CURRENT_MODE, os_MODEVAR_XEIG_FACTOR,
+			&xeig_factor, 0);
+	xos_read_mode_variable(os_CURRENT_MODE, os_MODEVAR_YEIG_FACTOR,
+			&yeig_factor, 0);
+	xos_read_mode_variable(os_CURRENT_MODE, os_MODEVAR_XWIND_LIMIT,
+			&xwind_limit, 0);
+	xos_read_mode_variable(os_CURRENT_MODE, os_MODEVAR_YWIND_LIMIT,
+			&ywind_limit, 0);
+	width = (xwind_limit + 1) << xeig_factor;
+	height = (ywind_limit + 1) << yeig_factor;
+
+	window.visible.x0 = width / 2 - 400;
+	window.visible.y0 = height / 2 - 64;
+	window.visible.x1 = window.visible.x0 + 800;
+	window.visible.y1 = window.visible.y0 + 128;
+
+	error = xwimpreadsysinfo_task(&task, 0);
+	if (error) {
+		LOG("xwimpreadsysinfo_task: 0x%x: %s",
+				error->errnum, error->errmess);
+		return;
+	}
+	if (!task)
+		return;  /* not a Wimp task */
+
+	error = xtaskwindowtaskinfo_window_task(&window_task);
+	if (error) {
+		LOG("xtaskwindowtaskinfo_window_task: 0x%x: %s",
+				error->errnum, error->errmess);
+		return;
+	}
+	if (window_task)
+		return;  /* in a TaskWindow */
+
+	xwimp_create_window((const wimp_window *) &window, &rufl_status_w);
+	state.w = rufl_status_w;
+	xwimp_get_window_state(&state);
+	xwimp_open_window((wimp_open *) &state);
+}
+
+
+/**
+ * Update the status window and multitask.
+ */
+
+void rufl_init_status(const char *status, float progress)
+{
+	wimp_block block;
+	static os_t last_t = 0;
+	os_t t;
+
+	if (!rufl_status_w)
+		return;
+
+	if (status) {
+		strncpy(rufl_status_buffer, status, sizeof rufl_status_buffer);
+		rufl_status_buffer[sizeof rufl_status_buffer - 1] = 0;
+		xwimp_set_icon_state(rufl_status_w, 3, 0, 0);
+	}
+	if (progress)
+		xwimp_resize_icon(rufl_status_w, 2, 16, -112,
+				16 + 768 * progress, -68);
+	xos_read_monotonic_time(&t);
+	if (last_t == t)
+		return;
+	xwimp_poll(wimp_QUEUE_REDRAW | wimp_MASK_LEAVING | wimp_MASK_ENTERING |
+			wimp_MASK_LOSE | wimp_MASK_GAIN | wimp_MASK_MESSAGE |
+			wimp_MASK_RECORDED | wimp_MASK_ACKNOWLEDGE,
+			&block, 0, 0);
+	last_t = t;
+}
+
+
+/**
+ * Close and delete the status window.
+ */
+
+void rufl_init_status_close(void)
+{
+	if (!rufl_status_w)
+		return;
+
+	xwimp_delete_window(rufl_status_w);
+	rufl_status_w = 0;
 }
