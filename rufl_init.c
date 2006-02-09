@@ -244,7 +244,6 @@ rufl_code rufl_init_font_list(void)
 
 rufl_code rufl_init_add_font(char *identifier)
 {
-	char pathname[100];
 	size_t size;
 	struct rufl_font_list_entry *font_list;
 	char *dot;
@@ -258,13 +257,11 @@ rufl_code rufl_init_add_font(char *identifier)
 	struct rufl_weight_table_entry *entry;
 
 	/* Check that:
-	 * a) it's got some Outlines data
-	 * b) it's not a RiScript generated font
-	 * c) it's not a TeX font	 */
-	snprintf(pathname, sizeof pathname, "%s.Out*", identifier);
+	 * a) it's not a RiScript generated font
+	 * b) it's not a TeX font	 */
 
 	/* Read required buffer size */
-	rufl_fm_error = xosfscontrol_canonicalise_path(pathname, 0,
+	rufl_fm_error = xosfscontrol_canonicalise_path(identifier, 0,
 			"Font$Path", 0, 0, &size);
 	if (rufl_fm_error) {
 		LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
@@ -272,13 +269,12 @@ rufl_code rufl_init_add_font(char *identifier)
 				rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
-
 	/* size is -(space required - 1) so negate and add 1 */
 	size = -size + 1;
 
 	/* Create buffer and canonicalise path */
 	char fullpath[size];
-	rufl_fm_error = xosfscontrol_canonicalise_path(pathname,
+	rufl_fm_error = xosfscontrol_canonicalise_path(identifier,
 			fullpath, "Font$Path", 0, size, 0);
 	if (rufl_fm_error) {
 		LOG("xosfscontrol_canonicalise_path: 0x%x: %s",
@@ -287,12 +283,9 @@ rufl_code rufl_init_add_font(char *identifier)
 		return rufl_FONT_MANAGER_ERROR;
 	}
 
-	/* LOG("%s (%c)", fullpath, fullpath[size - 2]); */
+	/* LOG("%s", fullpath); */
 
-	/* If the last character is an asterisk, there's no Outlines file. */
-	if (fullpath[size - 2] == '*' ||
-			strstr(fullpath, "RiScript") ||
-			strstr(fullpath, "!TeXFonts"))
+	if (strstr(fullpath, "RiScript") || strstr(fullpath, "!TeXFonts"))
 		/* Ignore this font */
 		return rufl_OK;
 
