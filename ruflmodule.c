@@ -2,7 +2,7 @@
  * This file is part of RUfl
  * Licensed under the MIT License,
  *                http://www.opensource.org/licenses/mit-license
- * Copyright 2005 James Bursa <james@semichrome.net>
+ * Copyright 2006 James Bursa <james@semichrome.net>
  */
 
 /* Python module for RUfl. */
@@ -42,7 +42,7 @@ pyrufl_paint(PyObject *self /* Not used */, PyObject *args)
 
 
 static char pyrufl_width__doc__[] =
-"width(font_family, font_style, font_size, string, flags)\n\n"
+"width(font_family, font_style, font_size, string)\n\n"
 "Return the width of Unicode text."
 ;
 
@@ -54,12 +54,11 @@ pyrufl_width(PyObject *self /* Not used */, PyObject *args)
 	unsigned int font_size;
 	const char *string;
 	int length;
-	unsigned int flags;
 	int width = 0;
 
-	if (!PyArg_ParseTuple(args, "siIs#I",
+	if (!PyArg_ParseTuple(args, "siIs#",
 			&font_family, &font_style, &font_size,
-			&string, &length, &flags))
+			&string, &length))
 		return NULL;
 
 	rufl_width(font_family, font_style, font_size, string, length,
@@ -173,7 +172,7 @@ static char pyrufl_module_documentation[] =
 ;
 
 void
-initrufl()
+initrufl(void)
 {
 	PyObject *module;
 	rufl_code code;
