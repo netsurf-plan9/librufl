@@ -5,7 +5,9 @@ COMPONENT_VERSION := 0.0.1
 COMPONENT_TYPE ?= lib-static
 
 # Setup the tooling
-include build/makefiles/Makefile.tools
+PREFIX ?= /opt/netsurf
+NSSHARED ?= $(PREFIX)/share/netsurf-buildsystem
+include $(NSSHARED)/makefiles/Makefile.tools
 
 TESTRUNNER := $(ECHO)
 
@@ -35,7 +37,7 @@ ifneq ($(findstring clean,$(MAKECMDGOALS)),clean)
   endif
 endif
 
-include build/makefiles/Makefile.top
+include $(NSBUILD)/Makefile.top
 
 # Extra installation rules
 I := /include

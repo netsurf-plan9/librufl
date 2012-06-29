@@ -13,4 +13,4 @@ $(BUILDDIR)/rufl_glyph_map.c: src/Glyphs
 	$(VQ)$(ECHO) "MKGLYPHS: $<"
 	$(Q)$(PERL) build/tools/makeglyphs < $< > $@
 
-include build/makefiles/Makefile.subdir
+include $(NSBUILD)/Makefile.subdir
