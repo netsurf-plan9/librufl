@@ -186,9 +186,22 @@ extern const size_t rufl_glyph_map_size;
 #ifdef __CC_NORCROFT
 #define __PRETTY_FUNCTION__ __func__
 #endif
-#define LOG(format, ...) (fprintf(stderr, __FILE__ " %s %i: ", \
-		__PRETTY_FUNCTION__, __LINE__), fprintf(stderr, format, \
-		__VA_ARGS__), fprintf(stderr, "\n"))
+#include <time.h>
+bool log_got_start_time;
+time_t log_start_time;
+#define LOG(format, ...)						\
+	do {								\
+		if (log_got_start_time == false) {			\
+			log_start_time = time(NULL);			\
+			log_got_start_time = true;			\
+		}							\
+									\
+		fprintf(stderr,"(%.6fs) " __FILE__ " %s %i: ",		\
+				difftime(time(NULL), log_start_time),	\
+				__PRETTY_FUNCTION__, __LINE__);		\
+		fprintf(stderr, format, __VA_ARGS__);			\
+		fprintf(stderr, "\n");					\
+	} while (0)
 #else
 #define LOG(format, ...) ((void) 0)
 #endif
