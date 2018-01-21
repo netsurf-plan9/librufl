@@ -861,9 +861,11 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 			/* Not finding the font isn't fatal */
 			if (code != rufl_FONT_MANAGER_ERROR ||
 				(rufl_fm_error->errnum != 
-						error_FONT_NOT_FOUND &&
+					error_FONT_NOT_FOUND &&
 				rufl_fm_error->errnum !=
-						error_FILE_NOT_FOUND)) {
+					error_FILE_NOT_FOUND &&
+				rufl_fm_error->errnum !=
+					error_FONT_ENCODING_NOT_FOUND)) {
 				free(charset);
 				for (i = 0; i < num_umaps; i++)
 					free((umap + i)->encoding);
