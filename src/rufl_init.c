@@ -877,6 +877,13 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 		}
 	}
 
+	if (num_umaps == 0) {
+		/* No mappings found: font is empty or couldn't be found */
+		free(umap);
+		free(charset);
+		return rufl_OK;
+	}
+
 	/* shrink-wrap */
 	charset->size = offsetof(struct rufl_character_set, block) +
 			32 * last_used;
