@@ -182,7 +182,7 @@ extern const struct rufl_glyph_map_entry rufl_glyph_map[];
 extern const size_t rufl_glyph_map_size;
 
 
-#ifndef NDEBUG
+#if 1 /*ndef NDEBUG*/
 #ifdef __CC_NORCROFT
 #define __PRETTY_FUNCTION__ __func__
 #endif

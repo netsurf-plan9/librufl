@@ -151,17 +151,24 @@ rufl_code rufl_init(void)
 
 		xfont_lose_font(font);
 	}
-	LOG("%s font manager", rufl_old_font_manager ? "old" : "new");
+	LOG("%s font manager%s",
+		rufl_old_font_manager ? "old" : "new",
+		rufl_broken_font_enumerate_characters ? " (broken fec)" : "");
 
 	/* test if the font manager supports background blending */
 	rufl_fm_error = xfont_cache_addr(&fm_version, 0, 0);
-	if (rufl_fm_error)
+	if (rufl_fm_error) {
+		LOG("xfont_cache_addr: 0x%x: %s",
+				rufl_fm_error->errnum,
+				rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
+	}
 	if (fm_version >= 335)
 		rufl_can_background_blend = true;
 
 	code = rufl_init_font_list();
 	if (code != rufl_OK) {
+		LOG("rufl_init_font_list: 0x%x", code);
 		rufl_quit();
 		xhourglass_off();
 		return code;
@@ -274,8 +281,10 @@ rufl_code rufl_init_font_list(void)
 			break;
 
 		code = rufl_init_add_font(identifier, local_name);
-		if (code != rufl_OK)
+		if (code != rufl_OK) {
+			LOG("rufl_init_add_font: 0x%x", code);
 			return code;
+		}
 	}
 
 	return rufl_OK;
@@ -469,7 +478,9 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 		rufl_fm_error = xfont_enumerate_characters(font, u, 
 				(int *) &next, (int *) &internal);
 		if (rufl_fm_error) {
-			LOG("xfont_enumerate_characters: 0x%x: %s",
+			LOG("xfont_enumerate_characters(\"%s\", "
+			    "U+%x, ...): 0x%x: %s",
+					font_name, u,
 					rufl_fm_error->errnum, 
 					rufl_fm_error->errmess);
 			xfont_lose_font(font);
@@ -536,7 +547,8 @@ rufl_code rufl_init_scan_font(unsigned int font_index)
 
 	if (rufl_fm_error) {
 		free(charset);
-		LOG("xfont_scan_string: 0x%x: %s",
+		LOG("xfont_scan_string(\"%s\", U+%x, ...): 0x%x: %s",
+				font_name, u,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
@@ -675,7 +687,8 @@ rufl_code rufl_init_scan_font_no_enumerate(unsigned int font_index)
 
 	if (rufl_fm_error) {
 		free(charset);
-		LOG("xfont_scan_string: 0x%x: %s",
+		LOG("xfont_scan_string(\"%s\", U+%x, ...): 0x%x: %s",
+				font_name, u,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
@@ -771,6 +784,14 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 		code = rufl_init_scan_font_in_encoding(font_name, encoding,
 				charset, umap + (num_umaps - 1), &last_used);
 		if (code != rufl_OK) {
+			LOG("rufl_init_scan_font_in_encoding(\"%s\", \"%s\", "
+			    "...): 0x%x (0x%x: %s)",
+					font_name, encoding, code,
+					code == rufl_FONT_MANAGER_ERROR ?
+						rufl_fm_error->errnum : 0,
+					code == rufl_FONT_MANAGER_ERROR ?
+						rufl_fm_error->errmess : "");
+
 			/* Not finding the font isn't fatal */
 			if (code != rufl_FONT_MANAGER_ERROR ||
 				(rufl_fm_error->errnum != 
@@ -825,6 +846,14 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 		code = rufl_init_scan_font_in_encoding(font_name, NULL,
 				charset, umap, &last_used);
 		if (code != rufl_OK) {
+			LOG("rufl_init_scan_font_in_encoding(\"%s\", NULL, "
+			    "...): 0x%x (0x%x: %s)",
+					font_name, code,
+					code == rufl_FONT_MANAGER_ERROR ?
+						rufl_fm_error->errnum : 0,
+					code == rufl_FONT_MANAGER_ERROR ?
+						rufl_fm_error->errmess : "");
+
 			/* Not finding the font isn't fatal */
 			if (code != rufl_FONT_MANAGER_ERROR ||
 				(rufl_fm_error->errnum != 
@@ -895,6 +924,8 @@ rufl_code rufl_init_scan_font_in_encoding(const char *font_name,
 
 	code = rufl_init_read_encoding(font, umap);
 	if (code != rufl_OK) {
+		LOG("rufl_init_read_encoding(\"%s\", ...): 0x%x",
+				buf, code);
 		xfont_lose_font(font);
 		return code;
 	}
@@ -942,7 +973,8 @@ rufl_code rufl_init_scan_font_in_encoding(const char *font_name,
 	xfont_lose_font(font);
 
 	if (rufl_fm_error) {
-		LOG("xfont_scan_string: 0x%x: %s",
+		LOG("xfont_scan_string(\"%s\", U+%x, ...): 0x%x: %s",
+				buf, umap->map[i].u,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
