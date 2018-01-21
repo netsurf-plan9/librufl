@@ -151,9 +151,6 @@ rufl_code rufl_init(void)
 
 		xfont_lose_font(font);
 	}
-	LOG("%s font manager%s",
-		rufl_old_font_manager ? "old" : "new",
-		rufl_broken_font_enumerate_characters ? " (broken fec)" : "");
 
 	/* test if the font manager supports background blending */
 	rufl_fm_error = xfont_cache_addr(&fm_version, 0, 0);
@@ -165,6 +162,11 @@ rufl_code rufl_init(void)
 	}
 	if (fm_version >= 335)
 		rufl_can_background_blend = true;
+
+	LOG("%s font manager (v %d.%d)%s",
+		rufl_old_font_manager ? "old" : "new",
+		fm_version / 100, fm_version % 100,
+		rufl_broken_font_enumerate_characters ? " (broken fec)" : "");
 
 	code = rufl_init_font_list();
 	if (code != rufl_OK) {
@@ -795,9 +797,11 @@ rufl_code rufl_init_scan_font_old(unsigned int font_index)
 			/* Not finding the font isn't fatal */
 			if (code != rufl_FONT_MANAGER_ERROR ||
 				(rufl_fm_error->errnum != 
-						error_FONT_NOT_FOUND &&
+					error_FONT_NOT_FOUND &&
 				rufl_fm_error->errnum !=
-						error_FILE_NOT_FOUND)) {
+					error_FILE_NOT_FOUND &&
+				rufl_fm_error->errnum !=
+					error_FONT_ENCODING_NOT_FOUND)) {
 				free(charset);
 				for (i = 0; i < num_umaps; i++)
 					free((umap + i)->encoding);
