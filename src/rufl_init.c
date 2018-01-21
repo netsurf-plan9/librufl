@@ -239,7 +239,7 @@ rufl_code rufl_init(void)
 
 	code = rufl_init_family_menu();
 	if (code != rufl_OK) {
-		LOG("rufl_init_substitution_table: 0x%x", code);
+		LOG("rufl_init_family_menu: 0x%x", code);
 		rufl_quit();
 		xhourglass_off();
 		return code;
