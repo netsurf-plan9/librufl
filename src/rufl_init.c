@@ -986,8 +986,8 @@ rufl_code rufl_init_scan_font_in_encoding(const char *font_name,
 	xfont_lose_font(font);
 
 	if (rufl_fm_error) {
-		LOG("xfont_scan_string(\"%s\", U+%x, ...): 0x%x: %s",
-				buf, umap->map[i].u,
+		LOG("xfont_scan_string(\"%s\", U+%x, ...) (c=%x): 0x%x: %s",
+				buf, umap->map[i].u,, umap->map[i].c,
 				rufl_fm_error->errnum, rufl_fm_error->errmess);
 		return rufl_FONT_MANAGER_ERROR;
 	}
