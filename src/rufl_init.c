@@ -1019,8 +1019,8 @@ rufl_code rufl_init_read_encoding(font_f font,
 	bool emit = false;
 	unsigned int u = 0;
 	unsigned int i = 0;
+	unsigned int n;
 	int c;
-	int n;
 	char filename[200];
 	char s[200];
 	struct rufl_glyph_map_entry *entry;
