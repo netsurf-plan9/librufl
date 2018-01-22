@@ -1011,6 +1011,12 @@ rufl_code rufl_init_scan_font_in_encoding(const char *font_name,
 rufl_code rufl_init_read_encoding(font_f font,
 		struct rufl_unicode_map *umap)
 {
+	enum {
+		STATE_START,
+		STATE_COMMENT,
+		STATE_COLLECT,
+	} state = STATE_START;
+	bool emit = false;
 	unsigned int u = 0;
 	unsigned int i = 0;
 	int c;
@@ -1035,18 +1041,50 @@ rufl_code rufl_init_read_encoding(font_f font,
 	if (!fp)
 		return rufl_IO_ERROR;
 
-	while (!feof(fp) && u != 256) {
+	while (!feof(fp) && i < 256 && u < 256) {
 		c = fgetc(fp);
-		if (c == '%') {
-			/* comment line */
-			fgets(s, sizeof s, fp);
-		} else if (c == '/') {
-			/* character definition */
-			if (i++ < 32)
-				continue;
-			n = fscanf(fp, "%100s", s);
-			if (n != 1)
-				break;
+
+		if (state == STATE_START) {
+			if (c == '/') {
+				n = 0;
+				state = STATE_COLLECT;
+			} else if (c <= 0x20) {
+				/* Consume C0 and space */
+			} else {
+				/* Comment, or garbage */
+				state = STATE_COMMENT;
+			}
+		} else if (state == STATE_COMMENT) {
+			/* Consume until the next C0 */
+			if (c < 0x20) {
+				state = STATE_START;
+			}
+		} else {
+			if ((c >= '0' && c <= '9') ||
+					(c >= 'a' && c <= 'z') ||
+					(c >= 'A' && c <= 'Z') ||
+					(c == '.') || (c == '_')) {
+				/* Printable: append */
+				s[n++] = c;
+				if (n >= sizeof(s)) {
+					/* Too long: garbage */
+					state = STATE_COMMENT;
+				}
+			} else if (c > 0x20) {
+				/* Garbage */
+				state = STATE_COMMENT;
+			} else {
+				/* C0 or space: done */
+				s[n] = '\0';
+				if (n != 0) {
+					emit = true;
+				}
+				state = STATE_START;
+			}
+		}
+
+		/* Ignore first 32 character codes (these are control chars) */
+		if (emit && i > 31 && i < 256 && u < 256) {
 			entry = bsearch(s, rufl_glyph_map,
 					rufl_glyph_map_size,
 					sizeof rufl_glyph_map[0],
@@ -1059,12 +1097,17 @@ rufl_code rufl_init_read_encoding(font_f font,
 				for (; strcmp(s, entry->glyph_name) == 0;
 						entry++) {
 					umap->map[u].u = entry->u;
-					umap->map[u].c = i - 1;
+					umap->map[u].c = i;
 					u++;
 					if (u == 256)
 						break;
 				}
 			}
+		}
+
+		if (emit) {
+			i++;
+			emit = false;
 		}
 	}
 
