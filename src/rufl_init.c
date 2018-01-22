@@ -1019,7 +1019,7 @@ rufl_code rufl_init_read_encoding(font_f font,
 	bool emit = false;
 	unsigned int u = 0;
 	unsigned int i = 0;
-	unsigned int n;
+	unsigned int n = 0;
 	int c;
 	char filename[200];
 	char s[200];
